@@ -21,8 +21,12 @@ create table if not exists public.rooms (
   breakout_schedule jsonb,
   anonymous_audio_queue jsonb,
   current_guess_index integer default 0,
+  is_public boolean default true,
   created_at timestamptz default now()
 );
+
+-- Ensure is_public column exists on existing deployments
+alter table public.rooms add column if not exists is_public boolean default true;
 
 -- 3. Create Players Table
 create table if not exists public.players (

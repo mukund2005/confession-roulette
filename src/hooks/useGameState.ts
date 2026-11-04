@@ -82,6 +82,23 @@ export function useGameState() {
     return playerList.every((p) => p.hasRecorded);
   }, [playerList]);
 
+  // Quick Match action for solo / random player matchmaking
+  const quickMatch = useCallback(async (playerName: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { room: matchedRoom, player: newPlayer } = await gameService.findOrCreatePublicBonfire(playerName);
+      setRoom(matchedRoom);
+      setPlayers({ [newPlayer.id]: newPlayer });
+      setCurrentPlayerId(newPlayer.id);
+    } catch (err: any) {
+      setError(err.message || 'Failed to locate bonfire');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   // Create Room action
   const createRoom = useCallback(async (hostName: string) => {
     setIsLoading(true);
@@ -334,6 +351,7 @@ export function useGameState() {
     error,
     createRoom,
     joinRoom,
+    quickMatch,
     startRecordingPhase,
     submitAudio,
     startBreakoutRounds,

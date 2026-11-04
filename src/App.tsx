@@ -21,6 +21,7 @@ export function App() {
     error,
     createRoom,
     joinRoom,
+    quickMatch,
     startRecordingPhase,
     submitAudio,
     startBreakoutRounds,
@@ -56,6 +57,7 @@ export function App() {
       <main className="flex-1 flex flex-col">
         {!room ? (
           <LandingStage
+            onQuickMatch={quickMatch}
             onCreateRoom={createRoom}
             onJoinRoom={joinRoom}
             isLoading={isLoading}
@@ -121,9 +123,9 @@ export function App() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-900 py-4 px-4 text-center text-xs text-slate-500">
+      <footer className="border-t border-white/10 py-4 px-4 text-center text-xs text-white/40 font-serif">
         <p>
-          Confession Roulette (Safe & Sound) • Speed Talk Breakouts, Blind Guessing & Real-Time Voice Synchronization
+          Rupiko • Amazing space on the internet for amazing confessions around the bonfire
         </p>
       </footer>
     </div>

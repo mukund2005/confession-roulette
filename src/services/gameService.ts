@@ -29,6 +29,7 @@ export const gameService = {
       breakoutSchedule: r.breakout_schedule,
       anonymousAudioQueue: r.anonymous_audio_queue,
       currentGuessIndex: r.current_guess_index || 0,
+      isPublic: r.is_public !== undefined ? r.is_public : true,
       createdAt: r.created_at,
     };
   },
@@ -48,6 +49,32 @@ export const gameService = {
       isSafe: p.is_safe || false,
       createdAt: p.created_at,
     };
+  },
+
+  // Quick Match: Find an open public bonfire with < 6 players, or create one
+  async findOrCreatePublicBonfire(playerName: string): Promise<{ room: Room; player: Player }> {
+    const { data: openRooms, error } = await supabase
+      .from('rooms')
+      .select('*, players(*)')
+      .eq('status', 'LOBBY')
+      .eq('is_public', true)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (!error && openRooms && openRooms.length > 0) {
+      for (const r of openRooms) {
+        const count = r.players ? r.players.length : 0;
+        if (count < 6) {
+          try {
+            return await this.joinRoom(r.room_code, playerName);
+          } catch {
+            // Next candidate
+          }
+        }
+      }
+    }
+
+    return await this.createRoom(playerName);
   },
 
   // Create a room in Supabase

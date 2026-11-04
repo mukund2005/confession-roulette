@@ -57,6 +57,7 @@ export interface Room {
   breakoutSchedule?: BreakoutRound[] | null;
   anonymousAudioQueue?: AnonymousVoice[] | null;
   currentGuessIndex?: number;
+  isPublic?: boolean;
   createdAt?: string;
 }
 

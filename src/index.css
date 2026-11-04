@@ -2,16 +2,16 @@
 
 @layer base {
   body {
-    @apply bg-slate-950 text-slate-100 min-h-screen selection:bg-rose-500 selection:text-white font-sans antialiased;
+    @apply bg-black text-white min-h-screen selection:bg-amber-400 selection:text-black font-serif antialiased;
   }
 }
 
 /* Custom animations and styling */
 @keyframes pulse-subtle {
   0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.85; transform: scale(1.03); }
+  50% { opacity: 0.85; transform: scale(1.02); }
 }
 
 .animate-pulse-subtle {
-  animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: pulse-subtle 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
