@@ -8,6 +8,14 @@ interface UseWebRTCBreakoutProps {
   isActive: boolean; // True during the 30s call, false during intermission
 }
 
+const PUBLIC_ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun4.l.google.com:19302' },
+];
+
 export function useWebRTCBreakout({ myId, partnerId, isActive }: UseWebRTCBreakoutProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [localVolume, setLocalVolume] = useState(0);
@@ -21,29 +29,39 @@ export function useWebRTCBreakout({ myId, partnerId, isActive }: UseWebRTCBreako
   const audioCtxRef = useRef<AudioContext | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
-  // Initialize or maintain Peer instance
+  // Initialize or maintain Peer instance with global Google STUN servers for internet NAT traversal
   useEffect(() => {
     if (!myId) return;
 
     if (!peerRef.current || peerRef.current.disconnected || peerRef.current.destroyed) {
       const peer = new Peer(myId, {
         debug: 1,
+        config: {
+          iceServers: PUBLIC_ICE_SERVERS,
+        },
       });
 
       peer.on('open', () => {
         setCallError(null);
       });
 
+      peer.on('disconnected', () => {
+        try {
+          peer.reconnect();
+        } catch (e) {
+          console.warn('Peer reconnect attempt:', e);
+        }
+      });
+
       peer.on('error', (err) => {
-        console.warn('PeerJS error:', err);
-        // ID taken or network glitch: PeerJS continues or reconnects
+        console.warn('PeerJS cross-internet error:', err);
       });
 
       peerRef.current = peer;
     }
 
     return () => {
-      // Clean up peer when unmounting hook
+      // Keep peer alive across rounds
     };
   }, [myId]);
 
@@ -55,6 +73,10 @@ export function useWebRTCBreakout({ myId, partnerId, isActive }: UseWebRTCBreako
         audioCtxRef.current = new AudioCtxClass();
       }
       const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 64;
       const source = ctx.createMediaStreamSource(stream);
@@ -85,10 +107,11 @@ export function useWebRTCBreakout({ myId, partnerId, isActive }: UseWebRTCBreako
   // Handle active round WebRTC negotiation
   useEffect(() => {
     let isCancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let initialTimer: ReturnType<typeof setTimeout> | null = null;
 
     const setupCall = async () => {
       if (!isActive || !myId || !partnerId) {
-        // Intermission or inactive: close active call
         if (currentCallRef.current) {
           currentCallRef.current.close();
           currentCallRef.current = null;
@@ -129,17 +152,36 @@ export function useWebRTCBreakout({ myId, partnerId, isActive }: UseWebRTCBreako
           }
           remoteAudioRef.current.srcObject = remoteStream;
           remoteAudioRef.current.play().catch(() => {});
+          if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+            audioCtxRef.current.resume().catch(() => {});
+          }
           monitorStream(remoteStream, false);
           setIsConnected(true);
         };
 
-        // 2. Deterministic Caller / Answerer Negotiation
-        // If myId < partnerId -> Initiate Call
-        // If myId > partnerId -> Listen for Call and Answer
+        // Incoming call listener for answerer
+        const handleIncoming = (incomingCall: MediaConnection) => {
+          if (incomingCall.peer === partnerId) {
+            currentCallRef.current = incomingCall;
+            incomingCall.answer(localStream);
+
+            incomingCall.on('stream', (remoteStream) => {
+              attachRemoteStream(remoteStream);
+            });
+
+            incomingCall.on('close', () => {
+              setIsConnected(false);
+              setRemoteVolume(0);
+            });
+          }
+        };
+
+        peer.on('call', handleIncoming);
+
+        // Deterministic Caller Initiation
         if (myId < partnerId) {
-          // Delay briefly to allow answerer listener to be ready
-          setTimeout(() => {
-            if (isCancelled || !isActive) return;
+          const makeCall = () => {
+            if (isCancelled || !isActive || isConnected) return;
             const call = peer.call(partnerId, localStream);
             currentCallRef.current = call;
 
@@ -156,30 +198,19 @@ export function useWebRTCBreakout({ myId, partnerId, isActive }: UseWebRTCBreako
               console.warn('Call error:', err);
               setCallError(err.message);
             });
-          }, 600);
-        } else {
-          // Answerer
-          const handleIncoming = (incomingCall: MediaConnection) => {
-            if (incomingCall.peer === partnerId) {
-              currentCallRef.current = incomingCall;
-              incomingCall.answer(localStream);
-
-              incomingCall.on('stream', (remoteStream) => {
-                attachRemoteStream(remoteStream);
-              });
-
-              incomingCall.on('close', () => {
-                setIsConnected(false);
-                setRemoteVolume(0);
-              });
-            }
           };
 
-          peer.on('call', handleIncoming);
+          initialTimer = setTimeout(makeCall, 700);
+          retryTimer = setTimeout(() => {
+            if (!isConnected && isActive && !isCancelled) {
+              makeCall();
+            }
+          }, 3200);
         }
       } catch (err: any) {
-        console.error('WebRTC setup error:', err);
-        setCallError(err.message || 'Microphone error during call setup');
+        if (!isCancelled) {
+          setCallError(err.message || 'Microphone access denied or audio error');
+        }
       }
     };
 
@@ -187,6 +218,8 @@ export function useWebRTCBreakout({ myId, partnerId, isActive }: UseWebRTCBreako
 
     return () => {
       isCancelled = true;
+      if (initialTimer) clearTimeout(initialTimer);
+      if (retryTimer) clearTimeout(retryTimer);
       if (currentCallRef.current) {
         currentCallRef.current.close();
         currentCallRef.current = null;
@@ -196,22 +229,19 @@ export function useWebRTCBreakout({ myId, partnerId, isActive }: UseWebRTCBreako
     };
   }, [isActive, myId, partnerId, monitorStream]);
 
-  // Teardown all streams when completely unmounted
+  // Clean up audio tracks on hook teardown
   useEffect(() => {
     return () => {
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => track.stop());
         localStreamRef.current = null;
       }
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.pause();
-        remoteAudioRef.current.srcObject = null;
+      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+        audioCtxRef.current.close().catch(() => {});
+        audioCtxRef.current = null;
       }
       if (animFrameRef.current) {
         cancelAnimationFrame(animFrameRef.current);
-      }
-      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
-        audioCtxRef.current.close().catch(() => {});
       }
       if (peerRef.current) {
         peerRef.current.destroy();

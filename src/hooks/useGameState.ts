@@ -404,38 +404,32 @@ export function useGameState() {
     }
   }, [room, isHost, playerList]);
 
-  // Leave room
-  const leaveRoom = useCallback(() => {
+  // Leave room with cloud sync
+  const leaveRoom = useCallback(async () => {
+    if (room && currentPlayerId) {
+      try {
+        await gameService.leaveRoom(room.id, currentPlayerId);
+      } catch (e) {
+        console.warn('Error leaving room:', e);
+      }
+    }
     localStorage.removeItem(SAVED_SESSION_KEY);
     setRoom(null);
     setPlayers({});
     setCurrentPlayerId(null);
-  }, []);
+  }, [room, currentPlayerId]);
 
-  // Add demo bot player for testing
-  const addDemoPlayer = useCallback(
-    async (botName: string) => {
-      if (!room) return;
-      const botId = crypto.randomUUID();
-      const demoPlayer: Player = {
-        id: botId,
-        roomId: room.id,
-        name: botName,
-        audioUrl: 'https://actions.google.com/sounds/v1/human_voices/applause.ogg',
-        hasRecorded: true,
-        score: 0,
-        reactionTimeMs: 300,
-        recognitionScore: 0,
-        correctGuessesCount: 0,
-        isSafe: false,
-        createdAt: new Date().toISOString(),
-      };
+  // Clean up player presence on tab close or navigation during lobby
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (room?.status === 'LOBBY' && currentPlayerId) {
+        gameService.leaveRoom(room.id, currentPlayerId).catch(() => {});
+      }
+    };
 
-      await gameService.updatePlayer(botId, demoPlayer);
-      setPlayers((prev) => ({ ...prev, [botId]: demoPlayer }));
-    },
-    [room]
-  );
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [room?.status, room?.id, currentPlayerId]);
 
   return {
     room,
@@ -464,6 +458,5 @@ export function useGameState() {
     nextConfession,
     playAgain,
     leaveRoom,
-    addDemoPlayer,
   };
 }

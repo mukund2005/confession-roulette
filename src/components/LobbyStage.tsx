@@ -43,10 +43,24 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const copyInviteLink = () => {
+  const copyInviteLink = async () => {
     audioTheme.playClickSound();
     const origin = window.location.origin;
     const link = `${origin}/?join=${room.roomCode}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Join my Rupiko Bonfire!',
+          text: `Join our circle of 6 campers around the bonfire! Code: ${room.roomCode}`,
+          url: link,
+        });
+        return;
+      } catch {
+        // Fallback to clipboard if share dialog was dismissed
+      }
+    }
+
     navigator.clipboard.writeText(link);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);

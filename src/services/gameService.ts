@@ -2,6 +2,15 @@ import { supabase } from '../lib/supabase';
 import type { Player, Room, Guess, AnonymousVoice } from '../types/game';
 import { generateRoundRobinSchedule } from '../utils/roundRobin';
 
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 export const gameService = {
   // Generate random 4-letter room code
   generateRoomCode(): string {
@@ -222,29 +231,41 @@ export const gameService = {
     }
   },
 
-  // Upload recorded audio confession
+  // Upload recorded audio confession with base64 data URL fallback for reliable cross-internet sync
   async uploadAudio(roomId: string, playerId: string, audioBlob: Blob): Promise<string> {
     const fileName = `${roomId}/${playerId}_${Date.now()}.webm`;
-    
-    const { data, error } = await supabase.storage
-      .from('confessions')
-      .upload(fileName, audioBlob, {
-        contentType: 'audio/webm',
-        upsert: true,
-      });
 
-    if (error) {
-      console.error('Supabase storage upload error:', error);
-      const fallbackUrl = URL.createObjectURL(audioBlob);
-      await this.updatePlayer(playerId, { audioUrl: fallbackUrl, hasRecorded: true });
-      return fallbackUrl;
+    try {
+      const { data, error } = await supabase.storage
+        .from('confessions')
+        .upload(fileName, audioBlob, {
+          contentType: 'audio/webm',
+          upsert: true,
+        });
+
+      if (!error && data) {
+        const { data: publicData } = supabase.storage.from('confessions').getPublicUrl(data.path);
+        const audioUrl = publicData.publicUrl;
+        await this.updatePlayer(playerId, { audioUrl, hasRecorded: true });
+        return audioUrl;
+      }
+    } catch (err) {
+      console.warn('Storage upload error, using base64 audio sync over internet:', err);
     }
 
-    const { data: publicData } = supabase.storage.from('confessions').getPublicUrl(data.path);
-    const audioUrl = publicData.publicUrl;
+    // Base64 fallback ensures audio is 100% playable over the internet even if bucket policies fail
+    const base64DataUrl = await blobToBase64(audioBlob);
+    await this.updatePlayer(playerId, { audioUrl: base64DataUrl, hasRecorded: true });
+    return base64DataUrl;
+  },
 
-    await this.updatePlayer(playerId, { audioUrl, hasRecorded: true });
-    return audioUrl;
+  // Remove player from room and cleanup empty rooms
+  async leaveRoom(roomId: string, playerId: string): Promise<void> {
+    await supabase.from('players').delete().eq('id', playerId).eq('room_id', roomId);
+    const { count } = await supabase.from('players').select('*', { count: 'exact', head: true }).eq('room_id', roomId);
+    if (count === 0) {
+      await supabase.from('rooms').delete().eq('id', roomId);
+    }
   },
 
   // Step 2: Initialize Speed Talk WebRTC Breakouts
