@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, Check, HelpCircle, ArrowRight, Trophy } from 'lucide-react';
 import type { Player, Room } from '../types/game';
 import { AudioVisualizer } from './AudioVisualizer';
+import { audioTheme } from '../utils/audioTheme';
 
 interface GuessingStageProps {
   room: Room;
@@ -47,6 +48,7 @@ export const GuessingStage: React.FC<GuessingStageProps> = ({
   }, [currentIndex]);
 
   const togglePlayAudio = () => {
+    audioTheme.playClickSound();
     if (!audioRef.current) return;
     if (isPlaying) {
       audioRef.current.pause();
@@ -72,6 +74,7 @@ export const GuessingStage: React.FC<GuessingStageProps> = ({
 
   const handleVote = async (guessedId: string) => {
     if (!currentVoice || hasVotedForCurrent || isSubmitting) return;
+    audioTheme.playClickSound();
     setSelectedPlayerId(guessedId);
     setIsSubmitting(true);
     try {

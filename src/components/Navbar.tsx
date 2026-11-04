@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Copy, Check, LogOut, Shield, Flame } from 'lucide-react';
+import { Copy, Check, LogOut, Shield, Flame, Volume2, VolumeX } from 'lucide-react';
 import type { Player, Room } from '../types/game';
+import { audioTheme } from '../utils/audioTheme';
 
 interface NavbarProps {
   room: Room | null;
@@ -14,12 +15,22 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLeaveRoom,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [isMuted, setIsMuted] = useState(audioTheme.getIsMuted());
 
   const copyRoomCode = () => {
+    audioTheme.playClickSound();
     if (!room?.roomCode) return;
     navigator.clipboard.writeText(room.roomCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleToggleAudio = () => {
+    const muted = audioTheme.toggleMute();
+    setIsMuted(muted);
+    if (!muted) {
+      audioTheme.playClickSound();
+    }
   };
 
   return (
@@ -80,6 +91,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
 
+          {/* Bonfire Audio Ambience Toggle */}
+          <button
+            onClick={handleToggleAudio}
+            className={`p-1.5 sm:p-2 rounded-lg border transition-all ${
+              isMuted
+                ? 'bg-white/5 border-white/10 text-white/40 hover:text-white hover:bg-white/10'
+                : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+            }`}
+            title={isMuted ? 'Unmute Campfire Ambience' : 'Mute Campfire Ambience'}
+          >
+            {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4 animate-pulse" />}
+          </button>
+
           {/* Bonfire Embers indicator */}
           <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] px-2.5 py-1 rounded-full border bg-amber-500/10 border-amber-500/30 text-amber-300">
             <Flame className="h-3.5 w-3.5 text-amber-400 animate-pulse" />
@@ -88,7 +112,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {room && (
             <button
-              onClick={onLeaveRoom}
+              onClick={() => {
+                audioTheme.playClickSound();
+                onLeaveRoom();
+              }}
               className="p-1.5 sm:p-2 text-white/40 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors border border-transparent hover:border-rose-500/20"
               title="Leave Bonfire"
             >

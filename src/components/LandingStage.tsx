@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AlertCircle } from 'lucide-react';
+import { audioTheme } from '../utils/audioTheme';
 
 interface LandingStageProps {
   onQuickMatch: (playerName: string) => Promise<void>;
@@ -37,6 +38,8 @@ export const LandingStage: React.FC<LandingStageProps> = ({
   }, []);
 
   const handlePlayClick = async () => {
+    audioTheme.playClickSound();
+    audioTheme.startBonfireAmbience();
     setFormError(null);
     const trimmed = name.trim() || `Camper_${Math.floor(Math.random() * 899 + 100)}`;
     setIsLocating(true);
@@ -50,6 +53,8 @@ export const LandingStage: React.FC<LandingStageProps> = ({
 
   const handleHostSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    audioTheme.playClickSound();
+    audioTheme.startBonfireAmbience();
     setFormError(null);
     const trimmed = name.trim();
     if (!trimmed) {
@@ -65,6 +70,8 @@ export const LandingStage: React.FC<LandingStageProps> = ({
 
   const handleJoinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    audioTheme.playClickSound();
+    audioTheme.startBonfireAmbience();
     setFormError(null);
     const trimmedName = name.trim();
     const trimmedCode = roomCode.trim().toUpperCase();

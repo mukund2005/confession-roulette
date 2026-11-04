@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Crown, Users, Play, Copy, Check, Bot, Share2, Flame, Sparkles } from 'lucide-react';
 import type { Player, Room } from '../types/game';
+import { audioTheme } from '../utils/audioTheme';
 
 interface LobbyStageProps {
   room: Room;
@@ -24,14 +25,25 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
   const [isStarting, setIsStarting] = useState(false);
   const [autoCountdown, setAutoCountdown] = useState<number | null>(null);
   const autoStartRef = useRef(false);
+  const prevCountRef = useRef(players.length);
+
+  // Play join chime when a new camper sits down
+  useEffect(() => {
+    if (players.length > prevCountRef.current) {
+      audioTheme.playJoinSound();
+    }
+    prevCountRef.current = players.length;
+  }, [players.length]);
 
   const copyCode = () => {
+    audioTheme.playClickSound();
     navigator.clipboard.writeText(room.roomCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const copyInviteLink = () => {
+    audioTheme.playClickSound();
     const origin = window.location.origin;
     const link = `${origin}/?join=${room.roomCode}`;
     navigator.clipboard.writeText(link);
@@ -40,6 +52,7 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
   };
 
   const handleStart = async () => {
+    audioTheme.playClickSound();
     setIsStarting(true);
     try {
       await onStartGame();
@@ -49,6 +62,7 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
   };
 
   const handleAddWanderingCamper = () => {
+    audioTheme.playClickSound();
     const camperNames = ['Kian', 'Zara', 'Milo', 'Ember', 'Rowan', 'Sage', 'Orion', 'Luna'];
     const randomName = camperNames[Math.floor(Math.random() * camperNames.length)] + '_' + Math.floor(Math.random() * 89 + 10);
     onAddBot(randomName);

@@ -215,6 +215,16 @@ export const gameService = {
       throw new Error('Game has already started in this room.');
     }
 
+    // Strict 6-member maximum cap restriction
+    const { count: currentCampersCount } = await supabase
+      .from('players')
+      .select('*', { count: 'exact', head: true })
+      .eq('room_id', roomData.id);
+
+    if (currentCampersCount !== null && currentCampersCount >= 6) {
+      throw new Error('This bonfire is full (maximum 6 campers allowed). Please join or host another bonfire.');
+    }
+
     const { data: playerData, error: playerError } = await supabase
       .from('players')
       .insert({
