@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Crown, Users, Play, Copy, Check, Bot, Share2, Flame } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Crown, Users, Play, Copy, Check, Bot, Share2, Flame, Sparkles } from 'lucide-react';
 import type { Player, Room } from '../types/game';
 
 interface LobbyStageProps {
@@ -22,6 +22,8 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [autoCountdown, setAutoCountdown] = useState<number | null>(null);
+  const autoStartRef = useRef(false);
 
   const copyCode = () => {
     navigator.clipboard.writeText(room.roomCode);
@@ -52,6 +54,30 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
     onAddBot(randomName);
   };
 
+  // Automatic Game Start when everyone (6 campers) is seated
+  useEffect(() => {
+    if (players.length >= 6 && !autoStartRef.current) {
+      autoStartRef.current = true;
+      setAutoCountdown(3);
+
+      const interval = setInterval(() => {
+        setAutoCountdown((prev) => {
+          if (prev !== null && prev <= 1) {
+            clearInterval(interval);
+            setIsStarting(true);
+            if (isHost || room.isSolo) {
+              onStartGame();
+            }
+            return 0;
+          }
+          return prev !== null ? prev - 1 : null;
+        });
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [players.length, isHost, room.isSolo, onStartGame]);
+
   const isFullCircle = players.length >= 6;
 
   return (
@@ -61,7 +87,7 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
         <img
           src="/campfire.png"
           alt="Bonfire"
-          className="w-28 h-28 object-contain drop-shadow-[0_10px_25px_rgba(249,115,22,0.45)] mb-3"
+          className="w-28 h-28 object-contain drop-shadow-[0_10px_25px_rgba(249,115,22,0.45)] mb-3 animate-pulse-subtle"
         />
         <span className="text-xs font-serif tracking-widest text-amber-400 uppercase bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20 flex items-center gap-1.5">
           <Flame className="h-3.5 w-3.5" /> Gathering Around The Bonfire
@@ -71,68 +97,70 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
         </h1>
         <p className="text-white/60 text-xs sm:text-sm mt-1 max-w-md mx-auto">
           {isFullCircle
-            ? 'The circle of 6 is complete! Ignite the embers to begin.'
-            : 'Share the bonfire link or wait as random campers join from the internet.'}
+            ? 'All 6 campers seated around the fire! Starting automatically...'
+            : 'Take your seat as campers gather around the embers.'}
         </p>
       </div>
 
-      {/* Bonfire Code & Share Card */}
-      <div className="bg-[#121214] border border-white/15 p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 w-full max-w-xl shadow-xl mb-6">
-        <div className="text-center sm:text-left">
-          <span className="text-[10px] text-white/40 uppercase font-sans tracking-wider block font-semibold">
-            Bonfire Code
-          </span>
-          <div className="text-3xl font-mono font-black tracking-widest text-[#fbbf24]">
-            {room.roomCode}
+      {/* Bonfire Code & Share Card (Only shown for Private Hosted Bonfires, hidden for Solo Play) */}
+      {!room.isSolo && (
+        <div className="bg-[#121214] border border-white/15 p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 w-full max-w-xl shadow-xl mb-6">
+          <div className="text-center sm:text-left">
+            <span className="text-[10px] text-white/40 uppercase font-sans tracking-wider block font-semibold">
+              Bonfire Code
+            </span>
+            <div className="text-3xl font-mono font-black tracking-widest text-[#fbbf24]">
+              {room.roomCode}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 font-sans">
+            <button
+              onClick={copyInviteLink}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-[#e2e8f0] hover:bg-white text-black rounded-xl text-xs font-bold transition-all shadow-md active:scale-95"
+              title="Copy invite link for friends"
+            >
+              {copiedLink ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  <span>Link Copied</span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="h-4 w-4" />
+                  <span>Share Link</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={copyCode}
+              className="flex items-center gap-1.5 px-3 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-semibold border border-white/10 transition-all active:scale-95"
+            >
+              {copied ? (
+                <>
+                  <Check className="h-4 w-4 text-emerald-400" />
+                  <span>Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="h-4 w-4 text-white/60" />
+                  <span>Code</span>
+                </>
+              )}
+            </button>
+            {players.length < 6 && (
+              <button
+                onClick={handleAddWanderingCamper}
+                className="flex items-center gap-1.5 px-3 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-medium transition-all"
+                title="Add a simulated camper to fill the 6-player group"
+              >
+                <Bot className="h-4 w-4" />
+                <span>+ Camper</span>
+              </button>
+            )}
           </div>
         </div>
-
-        <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 font-sans">
-          <button
-            onClick={copyInviteLink}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-[#e2e8f0] hover:bg-white text-black rounded-xl text-xs font-bold transition-all shadow-md active:scale-95"
-            title="Copy invite link for friends"
-          >
-            {copiedLink ? (
-              <>
-                <Check className="h-4 w-4" />
-                <span>Link Copied</span>
-              </>
-            ) : (
-              <>
-                <Share2 className="h-4 w-4" />
-                <span>Share Link</span>
-              </>
-            )}
-          </button>
-          <button
-            onClick={copyCode}
-            className="flex items-center gap-1.5 px-3 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-semibold border border-white/10 transition-all active:scale-95"
-          >
-            {copied ? (
-              <>
-                <Check className="h-4 w-4 text-emerald-400" />
-                <span>Copied</span>
-              </>
-            ) : (
-              <>
-                <Copy className="h-4 w-4 text-white/60" />
-                <span>Code</span>
-              </>
-            )}
-          </button>
-          {players.length < 6 && (
-            <button
-              onClick={handleAddWanderingCamper}
-              className="flex items-center gap-1.5 px-3 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-medium transition-all"
-              title="Add a simulated camper to fill the 6-player group"
-            >
-              <Bot className="h-4 w-4" />
-              <span>+ Camper</span>
-            </button>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Connected Campers Grid (Up to 6) */}
       <div className="w-full max-w-2xl bg-[#121214]/80 border border-white/10 rounded-2xl p-6 mb-6">
@@ -142,13 +170,13 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
             <span>Circle of Campers ({players.length} / 6)</span>
           </div>
           <span className="text-[11px] text-amber-400 font-medium">
-            {6 - players.length > 0 ? `${6 - players.length} seats remaining` : 'Full circle'}
+            {6 - players.length > 0 ? `${6 - players.length} seats remaining` : 'Full Circle'}
           </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           {players.map((player) => {
-            const isPlayerHost = player.id === room.hostId;
+            const isPlayerHost = player.id === room.hostId && !room.isSolo;
             const isMe = player.id === currentPlayer?.id;
 
             return (
@@ -165,6 +193,8 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
                     className={`h-9 w-9 rounded-xl flex items-center justify-center font-bold text-sm ${
                       isPlayerHost
                         ? 'bg-amber-400 text-black shadow-md'
+                        : isMe
+                        ? 'bg-amber-500/30 text-amber-300'
                         : 'bg-white/10 text-white'
                     }`}
                   >
@@ -211,9 +241,26 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
         </div>
       </div>
 
-      {/* Start Button or Waiting indicator */}
+      {/* Auto-Start Status or Countdown */}
       <div className="w-full max-w-md">
-        {isHost ? (
+        {autoCountdown !== null ? (
+          /* Auto-Countdown notification when 6 campers are seated */
+          <div className="text-center p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 animate-pulse">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <Sparkles className="h-4 w-4 text-amber-400" />
+              <span className="text-xs font-serif uppercase tracking-widest font-bold">
+                Circle of 6 Complete
+              </span>
+            </div>
+            <div className="text-2xl font-serif font-black text-white my-1">
+              Igniting the Bonfire in {autoCountdown}s...
+            </div>
+            <p className="text-[11px] text-white/60 font-sans">
+              Get ready to whisper your confession into the flames.
+            </p>
+          </div>
+        ) : !room.isSolo && isHost ? (
+          /* Host Manual start if they want to start early before 6 campers */
           <button
             onClick={handleStart}
             disabled={isStarting || players.length < 1}
@@ -236,11 +283,11 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
             <div className="flex items-center justify-center gap-2 text-amber-400 mb-1">
               <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
               <span className="text-xs font-serif uppercase tracking-wider">
-                Waiting for the Keeper of the Bonfire to start...
+                Waiting for 6 campers to be seated...
               </span>
             </div>
             <p className="text-xs text-white/50 font-sans">
-              Get ready to whisper your secret into the embers.
+              The bonfire automatically ignites once all seats are filled.
             </p>
           </div>
         )}

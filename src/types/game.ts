@@ -58,6 +58,7 @@ export interface Room {
   anonymousAudioQueue?: AnonymousVoice[] | null;
   currentGuessIndex?: number;
   isPublic?: boolean;
+  isSolo?: boolean;
   createdAt?: string;
 }
 

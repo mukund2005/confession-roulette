@@ -82,12 +82,12 @@ export function useGameState() {
     return playerList.every((p) => p.hasRecorded);
   }, [playerList]);
 
-  // Quick Match action for solo / random player matchmaking
+  // Quick Match action for solo / random player matchmaking (auto-seats 6, auto-starts)
   const quickMatch = useCallback(async (playerName: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      const { room: matchedRoom, player: newPlayer } = await gameService.findOrCreatePublicBonfire(playerName);
+      const { room: matchedRoom, player: newPlayer } = await gameService.startSoloPlay(playerName);
       setRoom(matchedRoom);
       setPlayers({ [newPlayer.id]: newPlayer });
       setCurrentPlayerId(newPlayer.id);
