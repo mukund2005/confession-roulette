@@ -30,6 +30,7 @@ export const gameService = {
       anonymousAudioQueue: r.anonymous_audio_queue,
       currentGuessIndex: r.current_guess_index || 0,
       isPublic: r.is_public !== undefined ? r.is_public : true,
+      isSolo: r.is_public === false,
       createdAt: r.created_at,
     };
   },

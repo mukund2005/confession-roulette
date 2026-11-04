@@ -24,7 +24,10 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
   const [copiedLink, setCopiedLink] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [autoCountdown, setAutoCountdown] = useState<number | null>(null);
+  const targetTimeRef = useRef<number | null>(null);
   const autoStartRef = useRef(false);
+  const onStartGameRef = useRef(onStartGame);
+  onStartGameRef.current = onStartGame;
   const prevCountRef = useRef(players.length);
 
   // Play join chime when a new camper sits down
@@ -70,27 +73,33 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
 
   // Automatic Game Start when everyone (6 campers) is seated
   useEffect(() => {
-    if (players.length >= 6 && !autoStartRef.current) {
-      autoStartRef.current = true;
-      setAutoCountdown(3);
-
-      const interval = setInterval(() => {
-        setAutoCountdown((prev) => {
-          if (prev !== null && prev <= 1) {
-            clearInterval(interval);
-            setIsStarting(true);
-            if (isHost || room.isSolo) {
-              onStartGame();
-            }
-            return 0;
-          }
-          return prev !== null ? prev - 1 : null;
-        });
-      }, 1000);
-
-      return () => clearInterval(interval);
+    if (players.length < 6) {
+      targetTimeRef.current = null;
+      setAutoCountdown(null);
+      return;
     }
-  }, [players.length, isHost, room.isSolo, onStartGame]);
+
+    if (!targetTimeRef.current) {
+      targetTimeRef.current = Date.now() + 3000;
+    }
+
+    const interval = setInterval(() => {
+      if (!targetTimeRef.current) return;
+      const diff = Math.max(0, Math.ceil((targetTimeRef.current - Date.now()) / 1000));
+      setAutoCountdown(diff);
+
+      if (diff === 0) {
+        clearInterval(interval);
+        if (!autoStartRef.current) {
+          autoStartRef.current = true;
+          setIsStarting(true);
+          onStartGameRef.current();
+        }
+      }
+    }, 250);
+
+    return () => clearInterval(interval);
+  }, [players.length]);
 
   const isFullCircle = players.length >= 6;
 
@@ -269,9 +278,21 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
             <div className="text-2xl font-serif font-black text-white my-1">
               Igniting the Bonfire in {autoCountdown}s...
             </div>
-            <p className="text-[11px] text-white/60 font-sans">
+            <p className="text-[11px] text-white/60 font-sans mb-3">
               Get ready to whisper your confession into the flames.
             </p>
+            <button
+              type="button"
+              onClick={() => {
+                audioTheme.playClickSound();
+                setIsStarting(true);
+                onStartGame();
+              }}
+              className="px-5 py-2 bg-[#fbbf24] hover:bg-white text-black font-serif text-xs font-bold rounded-xl uppercase tracking-widest shadow-md hover:scale-105 active:scale-95 transition-all inline-flex items-center gap-1.5"
+            >
+              <Flame className="h-3.5 w-3.5 fill-current" />
+              <span>Ignite Now</span>
+            </button>
           </div>
         ) : !room.isSolo && isHost ? (
           /* Host Manual start if they want to start early before 6 campers */

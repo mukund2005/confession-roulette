@@ -133,15 +133,15 @@ export function useGameState() {
     }
   }, []);
 
-  // Host starts the confession recording stage
+  // Start the confession recording stage
   const startRecordingPhase = useCallback(async () => {
-    if (!room || !isHost) return;
+    if (!room) return;
     try {
       await gameService.updateRoom(room.id, { status: 'RECORDING' });
     } catch (err: any) {
       setError(err.message);
     }
-  }, [room, isHost]);
+  }, [room]);
 
   // Upload player confession
   const submitAudio = useCallback(
