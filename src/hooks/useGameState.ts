@@ -37,24 +37,57 @@ export function useGameState() {
     }
   }, [room, currentPlayerId]);
 
-  // Subscribe to real-time updates when room is active
+  // Subscribe to real-time updates and presence disconnect detection when room is active
   useEffect(() => {
-    if (!room?.id) return;
+    if (!room?.id || !currentPlayerId) return;
 
     const unsubscribe = gameService.subscribeToRoom(
       room.id,
+      currentPlayerId,
       (updatedRoom) => {
         setRoom((prev) => ({ ...prev, ...updatedRoom }));
       },
       (updatedPlayers) => {
         setPlayers(updatedPlayers);
+      },
+      async (disconnectedPlayerId) => {
+        // Automatically kick out disconnected player when seated in the lobby
+        if (room.status === 'LOBBY') {
+          console.log(`[Bonfire] Disconnected camper detected: ${disconnectedPlayerId}. Kicking out from circle.`);
+          try {
+            await gameService.leaveRoom(room.id, disconnectedPlayerId);
+            // If the disconnected player was the host, promote this player
+            if (room.hostId === disconnectedPlayerId && currentPlayerId !== disconnectedPlayerId) {
+              await gameService.updateRoom(room.id, { hostId: currentPlayerId });
+            }
+          } catch (e) {
+            console.warn('Error kicking out disconnected player:', e);
+          }
+        }
       }
     );
 
     return () => {
       unsubscribe();
     };
-  }, [room?.id]);
+  }, [room?.id, room?.status, room?.hostId, currentPlayerId]);
+
+  // Handle client's own internet disconnection
+  useEffect(() => {
+    const handleOffline = () => {
+      setError('Internet connection lost. You were disconnected from the bonfire.');
+      if (room?.id && currentPlayerId) {
+        gameService.leaveRoom(room.id, currentPlayerId).catch(() => {});
+      }
+      localStorage.removeItem(SAVED_SESSION_KEY);
+      setRoom(null);
+      setPlayers({});
+      setCurrentPlayerId(null);
+    };
+
+    window.addEventListener('offline', handleOffline);
+    return () => window.removeEventListener('offline', handleOffline);
+  }, [room?.id, currentPlayerId]);
 
   const playerList = useMemo(() => Object.values(players), [players]);
 

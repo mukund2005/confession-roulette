@@ -421,11 +421,13 @@ export const gameService = {
     return winner1.id;
   },
 
-  // Subscribe to real-time updates for a room and all connected players
+  // Subscribe to real-time updates and presence heartbeats for a room and all connected players
   subscribeToRoom(
     roomId: string,
+    playerId: string,
     onRoomChange: (room: Room) => void,
-    onPlayersChange: (players: Record<string, Player>) => void
+    onPlayersChange: (players: Record<string, Player>) => void,
+    onPlayerDisconnect?: (disconnectedPlayerId: string) => void
   ): () => void {
     const fetchLatest = async () => {
       const { data: roomData } = await supabase.from('rooms').select('*').eq('id', roomId).maybeSingle();
@@ -445,8 +447,15 @@ export const gameService = {
 
     fetchLatest();
 
-    const channel = supabase
-      .channel(`room:${roomId}`)
+    const channel = supabase.channel(`room:${roomId}`, {
+      config: {
+        presence: {
+          key: playerId,
+        },
+      },
+    });
+
+    channel
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` },
@@ -463,11 +472,30 @@ export const gameService = {
           fetchLatest();
         }
       )
-      .subscribe();
+      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+        // Automatically kick out disconnected campers
+        if (leftPresences && Array.isArray(leftPresences)) {
+          leftPresences.forEach((p: any) => {
+            const leftId = p.playerId || p.key;
+            if (leftId && leftId !== playerId) {
+              onPlayerDisconnect?.(leftId);
+            }
+          });
+        }
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({
+            playerId,
+            onlineAt: new Date().toISOString(),
+          });
+        }
+      });
 
     const pollInterval = setInterval(fetchLatest, 1500);
 
     return () => {
+      channel.untrack().catch(() => {});
       supabase.removeChannel(channel);
       clearInterval(pollInterval);
     };
