@@ -38,7 +38,7 @@ export const gameService = {
         .single();
 
       if (roomError) {
-        throw new Error(`Failed to create room: ${roomError.message}`);
+        throw new Error(`Failed to create room in Supabase: ${roomError.message}. (Ensure supabase_schema.sql has been executed)`);
       }
 
       const { data: playerData, error: playerError } = await client
@@ -138,8 +138,15 @@ export const gameService = {
         .eq('room_code', formattedCode)
         .single();
 
-      if (roomError || !roomData) {
-        throw new Error('Room not found. Please verify the 4-letter room code.');
+      if (roomError) {
+        if (roomError.code === 'PGRST116') {
+          throw new Error(`Room code "${formattedCode}" not found. Verify the code with the host.`);
+        }
+        throw new Error(`Supabase error: ${roomError.message}. (Ensure supabase_schema.sql has been executed)`);
+      }
+
+      if (!roomData) {
+        throw new Error(`Room code "${formattedCode}" not found.`);
       }
 
       if (roomData.status !== 'LOBBY') {
@@ -194,7 +201,7 @@ export const gameService = {
       const room = Object.values(rooms).find((r) => r.roomCode.toUpperCase() === formattedCode);
 
       if (!room) {
-        throw new Error('Room not found. Please verify the room code.');
+        throw new Error(`Room "${formattedCode}" not found. (The app is currently in Local Sync mode. To play across different phones/devices, Supabase Cloud credentials must be configured).`);
       }
 
       if (room.status !== 'LOBBY') {

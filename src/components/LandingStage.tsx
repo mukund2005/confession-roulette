@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Mic, Zap, Shield, Volume2, ArrowRight, Sparkles } from 'lucide-react';
+import { Mic, Zap, Shield, Volume2, ArrowRight, Sparkles, Database, AlertCircle } from 'lucide-react';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 interface LandingStageProps {
   onCreateRoom: (hostName: string) => Promise<void>;
   onJoinRoom: (roomCode: string, playerName: string) => Promise<void>;
   isLoading: boolean;
   error: string | null;
+  onOpenCloudSettings?: () => void;
 }
 
 export const LandingStage: React.FC<LandingStageProps> = ({
@@ -13,6 +15,7 @@ export const LandingStage: React.FC<LandingStageProps> = ({
   onJoinRoom,
   isLoading,
   error,
+  onOpenCloudSettings,
 }) => {
   const [mode, setMode] = useState<'create' | 'join'>('create');
   const [name, setName] = useState('');
@@ -52,10 +55,29 @@ export const LandingStage: React.FC<LandingStageProps> = ({
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-4 max-w-4xl mx-auto">
       {/* Hero Badge */}
-      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-semibold mb-6 animate-pulse-subtle">
+      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-semibold mb-4 animate-pulse-subtle">
         <Sparkles className="h-3.5 w-3.5 text-amber-400" />
         Synchronized Voice Party Game
       </div>
+
+      {/* Cloud Status Notice */}
+      {!isSupabaseConfigured && (
+        <div
+          onClick={onOpenCloudSettings}
+          className="cursor-pointer mb-6 px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs max-w-md flex items-center justify-between gap-3 hover:bg-amber-500/15 transition-all shadow-sm"
+        >
+          <div className="flex items-center gap-2">
+            <Database className="h-4 w-4 text-amber-400 shrink-0" />
+            <span>
+              <strong>Local Mode:</strong> To play on <strong>separate phones/devices</strong>, tap
+              to connect your Supabase database.
+            </span>
+          </div>
+          <span className="text-[10px] uppercase font-bold bg-amber-500/20 px-2 py-0.5 rounded text-amber-300 shrink-0">
+            Setup
+          </span>
+        </div>
+      )}
 
       {/* Main Title */}
       <h1 className="text-4xl sm:text-6xl font-black text-center tracking-tight mb-4 text-white">
@@ -102,8 +124,9 @@ export const LandingStage: React.FC<LandingStageProps> = ({
         </div>
 
         {(formError || error) && (
-          <div className="mb-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
-            {formError || error}
+          <div className="mb-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+            <div className="flex-1 leading-relaxed">{formError || error}</div>
           </div>
         )}
 

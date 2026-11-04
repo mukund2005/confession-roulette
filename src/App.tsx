@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useGameState } from './hooks/useGameState';
 import { Navbar } from './components/Navbar';
 import { LandingStage } from './components/LandingStage';
@@ -6,8 +7,11 @@ import { RecordingStage } from './components/RecordingStage';
 import { MinigameStage } from './components/MinigameStage';
 import { PickingStage } from './components/PickingStage';
 import { RevealStage } from './components/RevealStage';
+import { SupabaseModal } from './components/SupabaseModal';
 
 export function App() {
+  const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
+
   const {
     room,
     playerList,
@@ -38,6 +42,7 @@ export function App() {
         room={room}
         currentPlayer={currentPlayer}
         onLeaveRoom={leaveRoom}
+        onOpenCloudSettings={() => setIsCloudModalOpen(true)}
       />
 
       {/* Global Error Notice if any */}
@@ -55,6 +60,7 @@ export function App() {
             onJoinRoom={joinRoom}
             isLoading={isLoading}
             error={error}
+            onOpenCloudSettings={() => setIsCloudModalOpen(true)}
           />
         ) : room.status === 'LOBBY' ? (
           <LobbyStage
@@ -104,6 +110,12 @@ export function App() {
           />
         ) : null}
       </main>
+
+      {/* Multi-Device Cloud Config Modal */}
+      <SupabaseModal
+        isOpen={isCloudModalOpen}
+        onClose={() => setIsCloudModalOpen(false)}
+      />
 
       {/* Footer */}
       <footer className="border-t border-slate-900 py-4 px-4 text-center text-xs text-slate-500">
