@@ -1,20 +1,17 @@
 import React, { useState } from 'react';
-import { Copy, Check, LogOut, Radio, Shield, Settings } from 'lucide-react';
-import { isSupabaseConfigured } from '../lib/supabase';
+import { Copy, Check, LogOut, Radio, Shield, Globe } from 'lucide-react';
 import type { Player, Room } from '../types/game';
 
 interface NavbarProps {
   room: Room | null;
   currentPlayer: Player | null;
   onLeaveRoom: () => void;
-  onOpenCloudSettings?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   room,
   currentPlayer,
   onLeaveRoom,
-  onOpenCloudSettings,
 }) => {
   const [copied, setCopied] = useState(false);
 
@@ -86,25 +83,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
 
-          {/* Connection Status Badge (Visible on all devices & Clickable to Configure) */}
-          <button
-            type="button"
-            onClick={onOpenCloudSettings}
-            className={`flex items-center gap-1.5 text-[10px] sm:text-[11px] px-2 py-1 rounded-full border transition-all ${
-              isSupabaseConfigured
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
-                : 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
-            }`}
-            title="Click to view or edit Cloud Database Settings"
-          >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                isSupabaseConfigured ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
-              }`}
-            />
-            <span>{isSupabaseConfigured ? 'Cloud Live' : 'Local Only'}</span>
-            <Settings className="h-3 w-3 opacity-60" />
-          </button>
+          {/* Cloud Multiplayer Live indicator */}
+          <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] px-2.5 py-1 rounded-full border bg-emerald-500/10 border-emerald-500/30 text-emerald-300">
+            <Globe className="h-3.5 w-3.5 text-emerald-400 animate-pulse" />
+            <span className="font-semibold">Cloud Live</span>
+          </div>
 
           {room && (
             <button

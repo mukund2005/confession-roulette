@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useGameState } from './hooks/useGameState';
 import { Navbar } from './components/Navbar';
 import { LandingStage } from './components/LandingStage';
@@ -7,11 +6,8 @@ import { RecordingStage } from './components/RecordingStage';
 import { MinigameStage } from './components/MinigameStage';
 import { PickingStage } from './components/PickingStage';
 import { RevealStage } from './components/RevealStage';
-import { SupabaseModal } from './components/SupabaseModal';
 
 export function App() {
-  const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
-
   const {
     room,
     playerList,
@@ -42,12 +38,11 @@ export function App() {
         room={room}
         currentPlayer={currentPlayer}
         onLeaveRoom={leaveRoom}
-        onOpenCloudSettings={() => setIsCloudModalOpen(true)}
       />
 
       {/* Global Error Notice if any */}
       {error && !room && (
-        <div className="max-w-md mx-auto mt-4 px-4 py-2 bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs rounded-lg">
+        <div className="max-w-md mx-auto mt-4 px-4 py-2 bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs rounded-lg text-center">
           {error}
         </div>
       )}
@@ -60,7 +55,6 @@ export function App() {
             onJoinRoom={joinRoom}
             isLoading={isLoading}
             error={error}
-            onOpenCloudSettings={() => setIsCloudModalOpen(true)}
           />
         ) : room.status === 'LOBBY' ? (
           <LobbyStage
@@ -111,16 +105,10 @@ export function App() {
         ) : null}
       </main>
 
-      {/* Multi-Device Cloud Config Modal */}
-      <SupabaseModal
-        isOpen={isCloudModalOpen}
-        onClose={() => setIsCloudModalOpen(false)}
-      />
-
       {/* Footer */}
       <footer className="border-t border-slate-900 py-4 px-4 text-center text-xs text-slate-500">
         <p>
-          Confession Roulette (Safe & Sound) • Built with React, Tailwind CSS, MediaRecorder API & Supabase Realtime
+          Confession Roulette (Safe & Sound) • Cloud Real-time Multiplayer powered by Supabase
         </p>
       </footer>
     </div>
