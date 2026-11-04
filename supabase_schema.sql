@@ -25,8 +25,17 @@ create table if not exists public.rooms (
   created_at timestamptz default now()
 );
 
--- Ensure is_public column exists on existing deployments
+-- Ensure is_public and Speed Talk columns exist on existing deployments
 alter table public.rooms add column if not exists is_public boolean default true;
+alter table public.rooms add column if not exists current_breakout_round integer default 0;
+alter table public.rooms add column if not exists current_breakout_end_time bigint;
+alter table public.rooms add column if not exists breakout_schedule jsonb;
+alter table public.rooms add column if not exists anonymous_audio_queue jsonb;
+alter table public.rooms add column if not exists current_guess_index integer default 0;
+
+-- Refresh status constraint on existing deployments to include BREAKOUT & GUESSING
+alter table public.rooms drop constraint if exists rooms_status_check;
+alter table public.rooms add constraint rooms_status_check check (status in ('LOBBY', 'RECORDING', 'MINIGAME', 'BREAKOUT', 'GUESSING', 'PICKING', 'REVEAL'));
 
 -- 3. Create Players Table
 create table if not exists public.players (

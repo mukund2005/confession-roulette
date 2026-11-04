@@ -55,7 +55,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Room & Player Info */}
         <div className="flex items-center gap-2 sm:gap-3 font-sans">
-          {room && !room.isSolo && (
+          {room && (
             <div className="flex items-center gap-1.5 sm:gap-2 bg-[#121214] border border-white/15 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg shadow-inner">
               <div className="flex flex-col text-right">
                 <span className="text-[9px] text-white/40 uppercase font-semibold">Bonfire</span>

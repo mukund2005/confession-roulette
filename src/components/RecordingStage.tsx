@@ -3,6 +3,7 @@ import { Mic, Square, RotateCcw, Check, Lock, Play, Pause, Sparkles, AlertCircle
 import type { Player } from '../types/game';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { AudioVisualizer } from './AudioVisualizer';
+import { audioTheme } from '../utils/audioTheme';
 
 interface RecordingStageProps {
   players: Player[];
@@ -50,6 +51,18 @@ export const RecordingStage: React.FC<RecordingStageProps> = ({
   );
 
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  const onProceedRef = React.useRef(onProceedToMinigame);
+  onProceedRef.current = onProceedToMinigame;
+  const autoBreakoutTriggered = React.useRef(false);
+
+  // Automatically start Speed Talk Breakouts immediately when all players have sealed their confessions
+  React.useEffect(() => {
+    if (allRecorded && !autoBreakoutTriggered.current) {
+      autoBreakoutTriggered.current = true;
+      audioTheme.playClickSound();
+      onProceedRef.current();
+    }
+  }, [allRecorded]);
 
   const handleShufflePrompt = () => {
     let nextPrompt = selectedPrompt;
@@ -311,24 +324,39 @@ export const RecordingStage: React.FC<RecordingStageProps> = ({
             </div>
           </div>
 
-          {/* Host advance button */}
+          {/* Automatic Speed Talk Transition Status */}
           <div className="mt-6 pt-4 border-t border-slate-800">
-            {isHost ? (
-              <button
-                type="button"
-                onClick={onProceedToMinigame}
-                disabled={!allRecorded}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-600 via-teal-500 to-emerald-500 hover:from-cyan-500 hover:to-emerald-400 text-white font-bold text-sm tracking-wide shadow-lg shadow-cyan-950/40 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                <span>Launch Speed Talk Breakouts</span>
-                <ArrowRight className="h-4 w-4" />
-              </button>
+            {allRecorded ? (
+              <div className="p-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-center animate-pulse">
+                <div className="text-sm font-bold text-cyan-300 flex items-center justify-center gap-2">
+                  <span className="h-4 w-4 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
+                  <span>All {players.length} Confessions Sealed!</span>
+                </div>
+                <div className="text-xs text-slate-300 mt-1">
+                  Starting Speed Talk Breakouts now...
+                </div>
+              </div>
             ) : (
-              <p className="text-center text-xs text-slate-400">
-                {allRecorded
-                  ? 'All confessions locked! Waiting for host to launch Speed Talk Breakouts...'
-                  : 'Waiting for all players to finish recording...'}
-              </p>
+              <div className="space-y-2">
+                <p className="text-center text-xs text-slate-400">
+                  Waiting for all campers to finish recording ({recordedCount} / {players.length})...
+                </p>
+                {(isHost || (currentPlayer?.hasRecorded && recordedCount >= 2)) && (
+                  <div className="flex justify-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        audioTheme.playClickSound();
+                        onProceedToMinigame();
+                      }}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-semibold rounded-xl border border-slate-700 transition-all inline-flex items-center gap-1.5 shadow-sm hover:scale-105 active:scale-95"
+                    >
+                      <span>Start Speed Talk Now ({recordedCount}/{players.length} Sealed)</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

@@ -52,76 +52,6 @@ export const gameService = {
     };
   },
 
-  // Solo Play: No room codes needed, immediately seats 5 campers to form a circle of 6
-  async startSoloPlay(playerName: string): Promise<{ room: Room; player: Player }> {
-    const hostId = crypto.randomUUID();
-    const roomCode = this.generateRoomCode();
-
-    const { data: roomData, error: roomError } = await supabase
-      .from('rooms')
-      .insert({
-        room_code: roomCode,
-        status: 'LOBBY',
-        host_id: hostId,
-        is_public: false,
-      })
-      .select()
-      .single();
-
-    if (roomError) {
-      console.error('Supabase create room error:', roomError);
-      throw new Error(`Failed to initialize solo play: ${roomError.message}`);
-    }
-
-    const { data: playerData, error: playerError } = await supabase
-      .from('players')
-      .insert({
-        id: hostId,
-        room_id: roomData.id,
-        name: playerName,
-        has_recorded: false,
-        score: 0,
-        is_safe: false,
-      })
-      .select()
-      .single();
-
-    if (playerError) {
-      throw new Error(`Failed to create player: ${playerError.message}`);
-    }
-
-    // Auto-seat 5 campers to make a complete circle of 6
-    const wanderingCampers = [
-      { name: 'Milo', audio: 'https://actions.google.com/sounds/v1/human_voices/human_fart.ogg' },
-      { name: 'Zara', audio: 'https://actions.google.com/sounds/v1/human_voices/sigh.ogg' },
-      { name: 'Ember', audio: 'https://actions.google.com/sounds/v1/human_voices/laughter.ogg' },
-      { name: 'Kian', audio: 'https://actions.google.com/sounds/v1/human_voices/applause.ogg' },
-      { name: 'Sage', audio: 'https://actions.google.com/sounds/v1/human_voices/cheering_and_applause.ogg' },
-    ];
-
-    for (const c of wanderingCampers) {
-      const camperId = crypto.randomUUID();
-      await supabase.from('players').insert({
-        id: camperId,
-        room_id: roomData.id,
-        name: c.name,
-        audio_url: c.audio,
-        has_recorded: true,
-        score: 0,
-        reaction_time_ms: Math.floor(Math.random() * 200) + 260,
-        is_safe: false,
-      });
-    }
-
-    const mappedRoom = this.mapRoom(roomData);
-    mappedRoom.isSolo = true;
-
-    return {
-      room: mappedRoom,
-      player: this.mapPlayer(playerData),
-    };
-  },
-
   // Quick Match: Find an open public bonfire with < 6 players, or create one
   async findOrCreatePublicBonfire(playerName: string): Promise<{ room: Room; player: Player }> {
     const { data: openRooms, error } = await supabase
@@ -146,6 +76,11 @@ export const gameService = {
     }
 
     return await this.createRoom(playerName);
+  },
+
+  // Start play: real 6-player matchmaking without bots
+  async startSoloPlay(playerName: string): Promise<{ room: Room; player: Player }> {
+    return this.findOrCreatePublicBonfire(playerName);
   },
 
   // Create a room in Supabase
@@ -450,10 +385,16 @@ export const gameService = {
     // Winner 1 is IMMUNE / SAFE
     await this.updatePlayer(winner1.id, { isSafe: true });
 
-    // Transition room to PICKING stage
+    // Queue up confessions to be heard together by all players (excluding Winner 1 whose voice is permanently safe)
+    const eligible = players.filter((p) => p.id !== winner1.id && p.audioUrl);
+    const firstRevealId = eligible[0]?.id || null;
+
+    // Transition room to REVEAL so all players listen to all confessions synchronously before Winner 1 chooses Winner 2!
     await this.updateRoom(roomId, {
-      status: 'PICKING',
+      status: 'REVEAL',
       winner1Id: winner1.id,
+      winner2Id: null,
+      activeAudioPlayerId: firstRevealId,
     });
 
     return winner1.id;

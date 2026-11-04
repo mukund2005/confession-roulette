@@ -34,7 +34,6 @@ export function App() {
     nextConfession,
     playAgain,
     leaveRoom,
-    addDemoPlayer,
   } = useGameState();
 
   return (
@@ -70,7 +69,6 @@ export function App() {
             currentPlayer={currentPlayer}
             isHost={isHost}
             onStartGame={startRecordingPhase}
-            onAddBot={addDemoPlayer}
           />
         ) : room.status === 'RECORDING' ? (
           <RecordingStage

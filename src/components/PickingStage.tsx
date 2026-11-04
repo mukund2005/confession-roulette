@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { Crown, Shield, UserCheck, Sparkles, ArrowRight, Hourglass } from 'lucide-react';
 import type { Player, Room } from '../types/game';
+import { audioTheme } from '../utils/audioTheme';
 
 interface PickingStageProps {
   room: Room;
@@ -32,7 +33,7 @@ export const PickingStage: React.FC<PickingStageProps> = ({
         origin: { y: 0.6 },
         colors: ['#f43f5e', '#fbbf24', '#34d399', '#38bdf8'],
       });
-    } catch (e) {
+    } catch {
       // Ignore if canvas not supported
     }
   }, []);
@@ -41,6 +42,7 @@ export const PickingStage: React.FC<PickingStageProps> = ({
 
   const handleConfirmPick = async () => {
     if (!selectedId) return;
+    audioTheme.playClickSound();
     setIsSubmitting(true);
     try {
       await onPickSecondWinner(selectedId);
@@ -54,11 +56,14 @@ export const PickingStage: React.FC<PickingStageProps> = ({
       {/* Header */}
       <div className="text-center mb-6">
         <span className="text-xs font-semibold tracking-wider text-rose-400 uppercase bg-rose-500/10 px-3 py-1 rounded-full border border-rose-500/20">
-          Stage 4: The Twist & Selection
+          Stage 6: The Final Choice
         </span>
         <h1 className="text-3xl sm:text-4xl font-extrabold text-white mt-2">
-          Immunity Declared
+          Winner 1 Chooses Winner 2
         </h1>
+        <p className="text-slate-400 text-xs sm:text-sm mt-1 max-w-md mx-auto">
+          All confessions have been heard around the bonfire. Winner 1 now crowns the second survivor.
+        </p>
       </div>
 
       {isWinner1 ? (
@@ -73,24 +78,24 @@ export const PickingStage: React.FC<PickingStageProps> = ({
             </div>
 
             <span className="text-xs font-bold uppercase tracking-widest text-amber-400 flex items-center gap-1.5 mb-1">
-              <Sparkles className="h-4 w-4" /> Winner 1: Most Unrecognizable Voice!
+              <Sparkles className="h-4 w-4" /> Winner 1: Immunity Champion!
             </span>
-            <h2 className="text-2xl font-black text-white">Your Secret is Permanently Safe</h2>
+            <h2 className="text-2xl font-black text-white">Your Secret Remains Permanently Safe</h2>
             <div className="mt-2 flex flex-col items-center gap-1.5">
               <span className="text-xs font-semibold text-amber-300 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
-                Recognition Score: {winner1?.recognitionScore ?? 0} correct guesses received
+                Least Recognized Voice • Total Immunity
               </span>
               <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 px-3.5 py-1.5 rounded-full text-xs text-emerald-400 font-semibold">
                 <Shield className="h-4 w-4 shrink-0" />
-                <span>Your audio confession is locked away and will NEVER be played.</span>
+                <span>Your confession was permanently protected and never revealed!</span>
               </div>
             </div>
           </div>
 
           <div className="border-t border-slate-800 pt-5 mb-6">
-            <h3 className="text-sm font-bold text-slate-200 mb-1">Choose The Second Winner</h3>
+            <h3 className="text-sm font-bold text-slate-200 mb-1">Crown The Second Winner</h3>
             <p className="text-xs text-slate-400 mb-4">
-              Select one person from the remaining confessors to crown as Winner 2.
+              Now that you have heard all the confessions, choose which camper will share the victory podium with you.
             </p>
 
             <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
@@ -100,7 +105,10 @@ export const PickingStage: React.FC<PickingStageProps> = ({
                   <button
                     key={candidate.id}
                     type="button"
-                    onClick={() => setSelectedId(candidate.id)}
+                    onClick={() => {
+                      audioTheme.playClickSound();
+                      setSelectedId(candidate.id);
+                    }}
                     className={`w-full flex items-center justify-between p-3.5 rounded-xl border transition-all text-left ${
                       isSelected
                         ? 'bg-amber-500/15 border-amber-500/50 shadow-[0_0_15px_rgba(251,191,36,0.2)]'
@@ -144,41 +152,40 @@ export const PickingStage: React.FC<PickingStageProps> = ({
             {isSubmitting ? (
               <span className="flex items-center gap-2">
                 <span className="h-4 w-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                Confirming Selection...
+                Crowning Winner 2...
               </span>
             ) : (
               <>
-                <span>Crown Winner 2 & Start Reveal</span>
+                <span>Crown Winner 2 & Reveal Grand Podium</span>
                 <ArrowRight className="h-4 w-4" />
               </>
             )}
           </button>
         </div>
       ) : (
-        /* Lockdown Waiting Screen for other players */
+        /* Waiting Screen for other players */
         <div className="w-full max-w-lg bg-slate-900/90 border border-slate-800 rounded-3xl p-8 text-center shadow-2xl backdrop-blur-xl">
           <div className="h-16 w-16 mx-auto rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center mb-4">
             <Hourglass className="h-8 w-8 animate-spin" style={{ animationDuration: '3s' }} />
           </div>
 
-          <span className="text-xs font-bold uppercase tracking-widest text-rose-400">
-            UI Locked For Decision
+          <span className="text-xs font-bold uppercase tracking-widest text-amber-400">
+            Winner 1 is Choosing
           </span>
           <h2 className="text-2xl font-black text-white mt-2 mb-2">
-            {winner1?.name || 'Winner 1'} is choosing...
+            {winner1?.name || 'Winner 1'} is making their choice...
           </h2>
           <p className="text-slate-400 text-xs sm:text-sm max-w-sm mx-auto mb-6">
-            Winner 1 has claimed total immunity. They are now hand-picking the 2nd Winner before the
-            confession reveal begins.
+            Everyone has heard all the confessions around the fire. Winner 1 is now hand-picking Winner 2 to join them on the victory podium!
           </p>
 
           <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 text-left">
             <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
-              Remember The Rules:
+              What Happens Next:
             </span>
             <ul className="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
-              <li>Winner 1's confession is completely masked forever.</li>
-              <li>Everyone else (including Winner 2) will have their voice revealed!</li>
+              <li>Winner 1 remains permanently protected with total immunity.</li>
+              <li>Winner 2 is chosen to share the victory crown!</li>
             </ul>
           </div>
         </div>

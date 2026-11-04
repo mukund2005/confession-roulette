@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { Player, Room, Guess } from '../types/game';
 import { gameService } from '../services/gameService';
+import { generateRoundRobinSchedule } from '../utils/roundRobin';
 
 const SAVED_SESSION_KEY = 'cr_player_session';
 
@@ -82,12 +83,12 @@ export function useGameState() {
     return playerList.every((p) => p.hasRecorded);
   }, [playerList]);
 
-  // Quick Match action for solo / random player matchmaking (auto-seats 6, auto-starts)
+  // Quick Match action for real 6-player matchmaking
   const quickMatch = useCallback(async (playerName: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      const { room: matchedRoom, player: newPlayer } = await gameService.startSoloPlay(playerName);
+      const { room: matchedRoom, player: newPlayer } = await gameService.findOrCreatePublicBonfire(playerName);
       setRoom(matchedRoom);
       setPlayers({ [newPlayer.id]: newPlayer });
       setCurrentPlayerId(newPlayer.id);
@@ -159,39 +160,101 @@ export function useGameState() {
     [room, currentPlayerId]
   );
 
-  // Step 2: Host starts the Speed Talk WebRTC Breakouts
+  // Step 2: Start the Speed Talk WebRTC Breakouts automatically
   const startBreakoutRounds = useCallback(async () => {
-    if (!room || !isHost) return;
+    if (!room) return;
     try {
       const playerIds = playerList.map((p) => p.id);
+      const schedule = generateRoundRobinSchedule(playerIds);
+      const endTime = Date.now() + 30000;
+
+      // Optimistically switch room status immediately so there's zero UI delay or freeze
+      setRoom((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'BREAKOUT',
+              breakoutSchedule: schedule,
+              currentBreakoutRound: 0,
+              currentBreakoutEndTime: endTime,
+            }
+          : prev
+      );
+
       await gameService.startSpeedTalkBreakouts(room.id, playerIds);
     } catch (err: any) {
+      console.error('Error starting breakout rounds:', err);
       setError(err.message);
     }
-  }, [room, isHost, playerList]);
+  }, [room, playerList]);
+
+  // Automatically start Speed Talk Breakouts immediately when all players have sealed confessions
+  const autoBreakoutTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    if (room?.status !== 'RECORDING') {
+      autoBreakoutTriggeredRef.current = false;
+      return;
+    }
+
+    if (allRecorded && !autoBreakoutTriggeredRef.current) {
+      autoBreakoutTriggeredRef.current = true;
+      startBreakoutRounds();
+    }
+  }, [room?.status, allRecorded, startBreakoutRounds]);
 
   // Advance to next breakout round
   const advanceBreakoutRound = useCallback(
     async (nextRound: number) => {
-      if (!room || !isHost) return;
+      if (!room) return;
+      const endTime = Date.now() + 30000;
+      setRoom((prev) =>
+        prev
+          ? {
+              ...prev,
+              currentBreakoutRound: nextRound,
+              currentBreakoutEndTime: endTime,
+            }
+          : prev
+      );
       try {
         await gameService.advanceBreakoutRound(room.id, nextRound);
       } catch (err: any) {
         setError(err.message);
       }
     },
-    [room, isHost]
+    [room]
   );
 
   // Step 3: Transition to Blind Audio Guessing
   const startGuessingStage = useCallback(async () => {
-    if (!room || !isHost) return;
+    if (!room) return;
     try {
+      const validPlayers = playerList.filter((p) => p.audioUrl);
+      const shuffled = [...validPlayers].sort(() => Math.random() - 0.5);
+      const labels = ['Voice A', 'Voice B', 'Voice C', 'Voice D', 'Voice E', 'Voice F', 'Voice G', 'Voice H'];
+      const anonymousQueue = shuffled.map((p, idx) => ({
+        label: labels[idx] || `Voice ${idx + 1}`,
+        audioUrl: p.audioUrl!,
+        targetPlayerId: p.id,
+      }));
+
+      setRoom((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'GUESSING',
+              anonymousAudioQueue: anonymousQueue,
+              currentGuessIndex: 0,
+            }
+          : prev
+      );
+
       await gameService.startBlindAudioGuessing(room.id, playerList);
     } catch (err: any) {
       setError(err.message);
     }
-  }, [room, isHost, playerList]);
+  }, [room, playerList]);
 
   // Submit a guess in the blind guessing round
   const submitVoiceGuess = useCallback(
@@ -212,67 +275,104 @@ export function useGameState() {
   // Advance to next voice in the blind audio guessing queue
   const advanceGuessVoice = useCallback(
     async (nextIndex: number) => {
-      if (!room || !isHost) return;
+      if (!room) return;
+      setRoom((prev) => (prev ? { ...prev, currentGuessIndex: nextIndex } : prev));
       try {
         await gameService.advanceGuessIndex(room.id, nextIndex);
       } catch (err: any) {
         setError(err.message);
       }
     },
-    [room, isHost]
+    [room]
   );
 
-  // Step 4: Finish guessing and crown Winner 1
+  // Step 4: Finish guessing and crown Winner 1, then transition to synchronized confession listening!
   const finishGuessingAndCrownWinner = useCallback(async () => {
-    if (!room || !isHost) return;
+    if (!room) return;
     try {
-      await gameService.calculateAndCrownWinner(room.id, playerList);
+      const winner1Id = await gameService.calculateAndCrownWinner(room.id, playerList);
+      const eligible = playerList.filter((p) => p.id !== winner1Id && p.audioUrl);
+      const firstRevealId = eligible[0]?.id || null;
+
+      // Optimistically move to REVEAL so all players listen to all confessions synchronously!
+      setRoom((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'REVEAL',
+              winner1Id,
+              winner2Id: null,
+              activeAudioPlayerId: firstRevealId,
+            }
+          : prev
+      );
     } catch (err: any) {
       setError(err.message);
     }
-  }, [room, isHost, playerList]);
+  }, [room, playerList]);
 
-  // Winner 1 picks Winner 2
+  // Winner 1 picks Winner 2 after listening to all confessions
   const pickSecondWinner = useCallback(
     async (selectedPlayerId: string) => {
       if (!room || !room.winner1Id || currentPlayerId !== room.winner1Id) return;
       try {
-        const revealPlayers = playerList.filter((p) => p.id !== room.winner1Id);
-        const firstRevealId = revealPlayers[0]?.id || null;
+        setRoom((prev) =>
+          prev
+            ? {
+                ...prev,
+                winner2Id: selectedPlayerId,
+                status: 'REVEAL',
+                activeAudioPlayerId: null,
+              }
+            : prev
+        );
 
+        await gameService.updatePlayer(selectedPlayerId, { isSafe: true });
         await gameService.updateRoom(room.id, {
           winner2Id: selectedPlayerId,
           status: 'REVEAL',
-          activeAudioPlayerId: firstRevealId,
+          activeAudioPlayerId: null,
         });
       } catch (err: any) {
         setError(err.message);
       }
     },
-    [room, currentPlayerId, playerList]
+    [room, currentPlayerId]
   );
 
-  // Advance to next confession in the reveal queue
+  // Advance to next confession in the reveal queue, or transition to PICKING when all have been heard!
   const nextConfession = useCallback(async () => {
-    if (!room || !isHost) return;
+    if (!room) return;
     try {
-      const eligiblePlayers = playerList.filter((p) => !p.isSafe);
+      const eligiblePlayers = playerList.filter((p) => p.id !== room.winner1Id && p.audioUrl);
       const currentIndex = eligiblePlayers.findIndex((p) => p.id === room.activeAudioPlayerId);
 
       if (currentIndex !== -1 && currentIndex + 1 < eligiblePlayers.length) {
         const nextPlayer = eligiblePlayers[currentIndex + 1];
+        setRoom((prev) => (prev ? { ...prev, activeAudioPlayerId: nextPlayer.id } : prev));
         await gameService.updateRoom(room.id, {
           activeAudioPlayerId: nextPlayer.id,
         });
       } else {
+        // All confessions have been heard by the entire bonfire! Transition to PICKING so Winner 1 chooses Winner 2!
+        setRoom((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: 'PICKING',
+                activeAudioPlayerId: null,
+              }
+            : prev
+        );
         await gameService.updateRoom(room.id, {
+          status: 'PICKING',
           activeAudioPlayerId: null,
         });
       }
     } catch (err: any) {
       setError(err.message);
     }
-  }, [room, isHost, playerList]);
+  }, [room, playerList]);
 
   // Reset / Play Again
   const playAgain = useCallback(async () => {
