@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
-import type { Player, Room } from '../types/game';
+import type { Player, Room, Guess, AnonymousVoice } from '../types/game';
+import { generateRoundRobinSchedule } from '../utils/roundRobin';
 
 export const gameService = {
   // Generate random 4-letter room code
@@ -10,6 +11,43 @@ export const gameService = {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return code;
+  },
+
+  // Map Supabase room record to Room interface
+  mapRoom(r: any): Room {
+    return {
+      id: r.id,
+      roomCode: r.room_code,
+      status: r.status,
+      hostId: r.host_id,
+      winner1Id: r.winner1_id,
+      winner2Id: r.winner2_id,
+      activeAudioPlayerId: r.active_audio_player_id,
+      minigameTargetTime: r.minigame_target_time,
+      currentBreakoutRound: r.current_breakout_round || 0,
+      currentBreakoutEndTime: r.current_breakout_end_time,
+      breakoutSchedule: r.breakout_schedule,
+      anonymousAudioQueue: r.anonymous_audio_queue,
+      currentGuessIndex: r.current_guess_index || 0,
+      createdAt: r.created_at,
+    };
+  },
+
+  // Map Supabase player record to Player interface
+  mapPlayer(p: any): Player {
+    return {
+      id: p.id,
+      roomId: p.room_id,
+      name: p.name,
+      audioUrl: p.audio_url,
+      hasRecorded: p.has_recorded,
+      score: p.score || 0,
+      reactionTimeMs: p.reaction_time_ms,
+      recognitionScore: p.recognition_score || 0,
+      correctGuessesCount: p.correct_guesses_count || 0,
+      isSafe: p.is_safe || false,
+      createdAt: p.created_at,
+    };
   },
 
   // Create a room in Supabase
@@ -50,34 +88,13 @@ export const gameService = {
       throw new Error(`Failed to create host player: ${playerError.message}`);
     }
 
-    const room: Room = {
-      id: roomData.id,
-      roomCode: roomData.room_code,
-      status: roomData.status,
-      hostId: roomData.host_id,
-      winner1Id: roomData.winner1_id,
-      winner2Id: roomData.winner2_id,
-      activeAudioPlayerId: roomData.active_audio_player_id,
-      minigameTargetTime: roomData.minigame_target_time,
-      createdAt: roomData.created_at,
+    return {
+      room: this.mapRoom(roomData),
+      player: this.mapPlayer(playerData),
     };
-
-    const player: Player = {
-      id: playerData.id,
-      roomId: playerData.room_id,
-      name: playerData.name,
-      audioUrl: playerData.audio_url,
-      hasRecorded: playerData.has_recorded,
-      score: playerData.score,
-      reactionTimeMs: playerData.reaction_time_ms,
-      isSafe: playerData.is_safe,
-      createdAt: playerData.created_at,
-    };
-
-    return { room, player };
   },
 
-  // Join an existing room from another phone/device
+  // Join an existing room
   async joinRoom(roomCode: string, playerName: string): Promise<{ room: Room; player: Player }> {
     const formattedCode = roomCode.trim().toUpperCase();
     const playerId = crypto.randomUUID();
@@ -119,31 +136,10 @@ export const gameService = {
       throw new Error(`Failed to join room: ${playerError.message}`);
     }
 
-    const room: Room = {
-      id: roomData.id,
-      roomCode: roomData.room_code,
-      status: roomData.status,
-      hostId: roomData.host_id,
-      winner1Id: roomData.winner1_id,
-      winner2Id: roomData.winner2_id,
-      activeAudioPlayerId: roomData.active_audio_player_id,
-      minigameTargetTime: roomData.minigame_target_time,
-      createdAt: roomData.created_at,
+    return {
+      room: this.mapRoom(roomData),
+      player: this.mapPlayer(playerData),
     };
-
-    const player: Player = {
-      id: playerData.id,
-      roomId: playerData.room_id,
-      name: playerData.name,
-      audioUrl: playerData.audio_url,
-      hasRecorded: playerData.has_recorded,
-      score: playerData.score,
-      reactionTimeMs: playerData.reaction_time_ms,
-      isSafe: playerData.is_safe,
-      createdAt: playerData.created_at,
-    };
-
-    return { room, player };
   },
 
   // Update room state in cloud
@@ -154,6 +150,11 @@ export const gameService = {
     if (updates.winner2Id !== undefined) payload.winner2_id = updates.winner2Id;
     if (updates.activeAudioPlayerId !== undefined) payload.active_audio_player_id = updates.activeAudioPlayerId;
     if (updates.minigameTargetTime !== undefined) payload.minigame_target_time = updates.minigameTargetTime;
+    if (updates.currentBreakoutRound !== undefined) payload.current_breakout_round = updates.currentBreakoutRound;
+    if (updates.currentBreakoutEndTime !== undefined) payload.current_breakout_end_time = updates.currentBreakoutEndTime;
+    if (updates.breakoutSchedule !== undefined) payload.breakout_schedule = updates.breakoutSchedule;
+    if (updates.anonymousAudioQueue !== undefined) payload.anonymous_audio_queue = updates.anonymousAudioQueue;
+    if (updates.currentGuessIndex !== undefined) payload.current_guess_index = updates.currentGuessIndex;
 
     const { error } = await supabase.from('rooms').update(payload).eq('id', roomId);
     if (error) {
@@ -167,6 +168,8 @@ export const gameService = {
     if (updates.hasRecorded !== undefined) payload.has_recorded = updates.hasRecorded;
     if (updates.audioUrl !== undefined) payload.audio_url = updates.audioUrl;
     if (updates.reactionTimeMs !== undefined) payload.reaction_time_ms = updates.reactionTimeMs;
+    if (updates.recognitionScore !== undefined) payload.recognition_score = updates.recognitionScore;
+    if (updates.correctGuessesCount !== undefined) payload.correct_guesses_count = updates.correctGuessesCount;
     if (updates.isSafe !== undefined) payload.is_safe = updates.isSafe;
     if (updates.score !== undefined) payload.score = updates.score;
 
@@ -176,7 +179,7 @@ export const gameService = {
     }
   },
 
-  // Upload recorded audio confession to Supabase Storage
+  // Upload recorded audio confession
   async uploadAudio(roomId: string, playerId: string, audioBlob: Blob): Promise<string> {
     const fileName = `${roomId}/${playerId}_${Date.now()}.webm`;
     
@@ -189,7 +192,6 @@ export const gameService = {
 
     if (error) {
       console.error('Supabase storage upload error:', error);
-      // Fallback data URL if storage upload failed so game never blocks
       const fallbackUrl = URL.createObjectURL(audioBlob);
       await this.updatePlayer(playerId, { audioUrl: fallbackUrl, hasRecorded: true });
       return fallbackUrl;
@@ -202,6 +204,153 @@ export const gameService = {
     return audioUrl;
   },
 
+  // Step 2: Initialize Speed Talk WebRTC Breakouts
+  async startSpeedTalkBreakouts(roomId: string, playerIds: string[]): Promise<void> {
+    const schedule = generateRoundRobinSchedule(playerIds);
+    const endTime = Date.now() + 30000; // 30 second round
+
+    await this.updateRoom(roomId, {
+      status: 'BREAKOUT',
+      breakoutSchedule: schedule,
+      currentBreakoutRound: 0,
+      currentBreakoutEndTime: endTime,
+    });
+  },
+
+  // Advance to next Speed Talk round
+  async advanceBreakoutRound(roomId: string, nextRound: number): Promise<void> {
+    const endTime = Date.now() + 30000;
+    await this.updateRoom(roomId, {
+      currentBreakoutRound: nextRound,
+      currentBreakoutEndTime: endTime,
+    });
+  },
+
+  // Step 3: Initialize Blind Audio Guessing
+  async startBlindAudioGuessing(roomId: string, players: Player[]): Promise<void> {
+    // Collect all players with audio recorded and shuffle them
+    const validPlayers = players.filter((p) => p.audioUrl);
+    const shuffled = [...validPlayers].sort(() => Math.random() - 0.5);
+
+    const labels = ['Voice A', 'Voice B', 'Voice C', 'Voice D', 'Voice E', 'Voice F', 'Voice G', 'Voice H'];
+    const anonymousQueue: AnonymousVoice[] = shuffled.map((p, idx) => ({
+      label: labels[idx] || `Voice ${idx + 1}`,
+      audioUrl: p.audioUrl!,
+      targetPlayerId: p.id,
+    }));
+
+    await this.updateRoom(roomId, {
+      status: 'GUESSING',
+      anonymousAudioQueue: anonymousQueue,
+      currentGuessIndex: 0,
+    });
+  },
+
+  // Submit a guess for a voice
+  async submitGuess(guess: Guess): Promise<void> {
+    const { error } = await supabase.from('guesses').insert({
+      room_id: guess.roomId,
+      guesser_id: guess.guesserId,
+      target_player_id: guess.targetPlayerId,
+      guessed_player_id: guess.guessedPlayerId,
+      voice_label: guess.voiceLabel,
+    });
+
+    if (error) {
+      console.error('Error submitting guess:', error);
+    }
+  },
+
+  // Fetch all guesses submitted for this room
+  async fetchGuesses(roomId: string): Promise<Guess[]> {
+    const { data, error } = await supabase.from('guesses').select('*').eq('room_id', roomId);
+    if (error || !data) return [];
+
+    return data.map((g) => ({
+      id: g.id,
+      roomId: g.room_id,
+      guesserId: g.guesser_id,
+      targetPlayerId: g.target_player_id,
+      guessedPlayerId: g.guessed_player_id,
+      voiceLabel: g.voice_label,
+    }));
+  },
+
+  // Advance to next voice in blind audio guessing
+  async advanceGuessIndex(roomId: string, nextIndex: number): Promise<void> {
+    await this.updateRoom(roomId, {
+      currentGuessIndex: nextIndex,
+    });
+  },
+
+  // Step 4: Scoring & Winner 1 Determination
+  async calculateAndCrownWinner(roomId: string, players: Player[]): Promise<string> {
+    const guesses = await this.fetchGuesses(roomId);
+
+    // 1. Calculate Recognition Score for each player:
+    // Total number of correct guesses received by each player (how recognizable they were)
+    const recognitionScores: Record<string, number> = {};
+    const reverseAccuracy: Record<string, number> = {};
+
+    players.forEach((p) => {
+      recognitionScores[p.id] = 0;
+      reverseAccuracy[p.id] = 0;
+    });
+
+    guesses.forEach((g) => {
+      // If guessed correctly on target
+      if (g.guessedPlayerId === g.targetPlayerId) {
+        // Recognition score increment for the target
+        recognitionScores[g.targetPlayerId] = (recognitionScores[g.targetPlayerId] || 0) + 1;
+        // Correct guesses increment for the guesser
+        if (g.guesserId !== g.targetPlayerId) {
+          reverseAccuracy[g.guesserId] = (reverseAccuracy[g.guesserId] || 0) + 1;
+        }
+      }
+    });
+
+    // Update scores in database for all players
+    for (const p of players) {
+      await this.updatePlayer(p.id, {
+        recognitionScore: recognitionScores[p.id] || 0,
+        correctGuessesCount: reverseAccuracy[p.id] || 0,
+      });
+    }
+
+    // 2. Winner 1: Player with the MINIMUM recognition score (most unrecognizable voice)
+    const candidates = [...players].sort((a, b) => {
+      const scoreA = recognitionScores[a.id] || 0;
+      const scoreB = recognitionScores[b.id] || 0;
+
+      if (scoreA !== scoreB) {
+        return scoreA - scoreB; // Ascending: minimum wins!
+      }
+
+      // Tie-Breaker: Highest number of correct guesses on other players
+      const accA = reverseAccuracy[a.id] || 0;
+      const accB = reverseAccuracy[b.id] || 0;
+      if (accA !== accB) {
+        return accB - accA; // Descending: higher accuracy wins tie-break!
+      }
+
+      // Final fallback: deterministic pseudo-random tie-break
+      return a.id.localeCompare(b.id);
+    });
+
+    const winner1 = candidates[0];
+
+    // Winner 1 is IMMUNE / SAFE
+    await this.updatePlayer(winner1.id, { isSafe: true });
+
+    // Transition room to PICKING stage
+    await this.updateRoom(roomId, {
+      status: 'PICKING',
+      winner1Id: winner1.id,
+    });
+
+    return winner1.id;
+  },
+
   // Subscribe to real-time updates for a room and all connected players
   subscribeToRoom(
     roomId: string,
@@ -211,43 +360,21 @@ export const gameService = {
     const fetchLatest = async () => {
       const { data: roomData } = await supabase.from('rooms').select('*').eq('id', roomId).maybeSingle();
       if (roomData) {
-        onRoomChange({
-          id: roomData.id,
-          roomCode: roomData.room_code,
-          status: roomData.status,
-          hostId: roomData.host_id,
-          winner1Id: roomData.winner1_id,
-          winner2Id: roomData.winner2_id,
-          activeAudioPlayerId: roomData.active_audio_player_id,
-          minigameTargetTime: roomData.minigame_target_time,
-          createdAt: roomData.created_at,
-        });
+        onRoomChange(this.mapRoom(roomData));
       }
 
       const { data: playersData } = await supabase.from('players').select('*').eq('room_id', roomId);
       if (playersData) {
         const playerMap: Record<string, Player> = {};
         playersData.forEach((p) => {
-          playerMap[p.id] = {
-            id: p.id,
-            roomId: p.room_id,
-            name: p.name,
-            audioUrl: p.audio_url,
-            hasRecorded: p.has_recorded,
-            score: p.score,
-            reactionTimeMs: p.reaction_time_ms,
-            isSafe: p.is_safe,
-            createdAt: p.created_at,
-          };
+          playerMap[p.id] = this.mapPlayer(p);
         });
         onPlayersChange(playerMap);
       }
     };
 
-    // 1. Initial fetch
     fetchLatest();
 
-    // 2. Supabase Realtime Channel
     const channel = supabase
       .channel(`room:${roomId}`)
       .on(
@@ -255,18 +382,7 @@ export const gameService = {
         { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` },
         (payload) => {
           if (payload.new) {
-            const r = payload.new as any;
-            onRoomChange({
-              id: r.id,
-              roomCode: r.room_code,
-              status: r.status,
-              hostId: r.host_id,
-              winner1Id: r.winner1_id,
-              winner2Id: r.winner2_id,
-              activeAudioPlayerId: r.active_audio_player_id,
-              minigameTargetTime: r.minigame_target_time,
-              createdAt: r.created_at,
-            });
+            onRoomChange(this.mapRoom(payload.new));
           }
         }
       )
@@ -279,7 +395,6 @@ export const gameService = {
       )
       .subscribe();
 
-    // 3. Fallback active polling every 1.5 seconds for rock-solid mobile sync
     const pollInterval = setInterval(fetchLatest, 1500);
 
     return () => {

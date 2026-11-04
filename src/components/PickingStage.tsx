@@ -73,12 +73,17 @@ export const PickingStage: React.FC<PickingStageProps> = ({
             </div>
 
             <span className="text-xs font-bold uppercase tracking-widest text-amber-400 flex items-center gap-1.5 mb-1">
-              <Sparkles className="h-4 w-4" /> You Won First Place!
+              <Sparkles className="h-4 w-4" /> Winner 1: Most Unrecognizable Voice!
             </span>
             <h2 className="text-2xl font-black text-white">Your Secret is Permanently Safe</h2>
-            <div className="mt-2 flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 px-3.5 py-1.5 rounded-full text-xs text-emerald-400 font-semibold">
-              <Shield className="h-4 w-4 shrink-0" />
-              <span>Your audio confession is locked away and will NEVER be played.</span>
+            <div className="mt-2 flex flex-col items-center gap-1.5">
+              <span className="text-xs font-semibold text-amber-300 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
+                Recognition Score: {winner1?.recognitionScore ?? 0} correct guesses received
+              </span>
+              <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 px-3.5 py-1.5 rounded-full text-xs text-emerald-400 font-semibold">
+                <Shield className="h-4 w-4 shrink-0" />
+                <span>Your audio confession is locked away and will NEVER be played.</span>
+              </div>
             </div>
           </div>
 

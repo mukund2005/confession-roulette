@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { Player, Room } from '../types/game';
+import type { Player, Room, Guess } from '../types/game';
 import { gameService } from '../services/gameService';
 
 const SAVED_SESSION_KEY = 'cr_player_session';
@@ -142,79 +142,84 @@ export function useGameState() {
     [room, currentPlayerId]
   );
 
-  // Host starts the minigame
-  const startMinigame = useCallback(async () => {
+  // Step 2: Host starts the Speed Talk WebRTC Breakouts
+  const startBreakoutRounds = useCallback(async () => {
     if (!room || !isHost) return;
     try {
-      // Set random target delay between 3.0 to 6.0 seconds from now
-      const delayMs = Math.floor(Math.random() * 3000) + 3000;
-      const targetTime = Date.now() + delayMs;
-
-      // Reset players' reaction times
-      for (const p of playerList) {
-        await gameService.updatePlayer(p.id, { reactionTimeMs: null });
-      }
-
-      await gameService.updateRoom(room.id, {
-        status: 'MINIGAME',
-        minigameTargetTime: targetTime,
-        winner1Id: null,
-        winner2Id: null,
-      });
+      const playerIds = playerList.map((p) => p.id);
+      await gameService.startSpeedTalkBreakouts(room.id, playerIds);
     } catch (err: any) {
       setError(err.message);
     }
   }, [room, isHost, playerList]);
 
-  // Submit reaction time for minigame
-  const submitReaction = useCallback(
-    async (reactionTimeMs: number) => {
-      if (!room || !currentPlayerId) return;
+  // Advance to next breakout round
+  const advanceBreakoutRound = useCallback(
+    async (nextRound: number) => {
+      if (!room || !isHost) return;
       try {
-        await gameService.updatePlayer(currentPlayerId, { reactionTimeMs });
-
-        // Check if all players have submitted reaction times
-        setTimeout(async () => {
-          const updatedList = Object.values(players);
-          const allReacted = updatedList.every(
-            (p) => (p.id === currentPlayerId ? true : p.reactionTimeMs !== null)
-          );
-
-          if (allReacted && updatedList.length > 0) {
-            // Find player with the fastest reaction time (> 0)
-            const validReactions = updatedList
-              .map((p) => ({
-                id: p.id,
-                time: p.id === currentPlayerId ? reactionTimeMs : p.reactionTimeMs || 99999,
-              }))
-              .filter((p) => p.time > 0);
-
-            if (validReactions.length > 0) {
-              validReactions.sort((a, b) => a.time - b.time);
-              const winner1Id = validReactions[0].id;
-
-              // Winner 1's confession is permanently protected
-              await gameService.updatePlayer(winner1Id, { isSafe: true });
-              await gameService.updateRoom(room.id, {
-                status: 'PICKING',
-                winner1Id,
-              });
-            }
-          }
-        }, 300);
+        await gameService.advanceBreakoutRound(room.id, nextRound);
       } catch (err: any) {
         setError(err.message);
       }
     },
-    [room, currentPlayerId, players]
+    [room, isHost]
   );
+
+  // Step 3: Transition to Blind Audio Guessing
+  const startGuessingStage = useCallback(async () => {
+    if (!room || !isHost) return;
+    try {
+      await gameService.startBlindAudioGuessing(room.id, playerList);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, [room, isHost, playerList]);
+
+  // Submit a guess in the blind guessing round
+  const submitVoiceGuess = useCallback(
+    async (targetPlayerId: string, guessedPlayerId: string, voiceLabel: string) => {
+      if (!room || !currentPlayerId) return;
+      const guess: Guess = {
+        roomId: room.id,
+        guesserId: currentPlayerId,
+        targetPlayerId,
+        guessedPlayerId,
+        voiceLabel,
+      };
+      await gameService.submitGuess(guess);
+    },
+    [room, currentPlayerId]
+  );
+
+  // Advance to next voice in the blind audio guessing queue
+  const advanceGuessVoice = useCallback(
+    async (nextIndex: number) => {
+      if (!room || !isHost) return;
+      try {
+        await gameService.advanceGuessIndex(room.id, nextIndex);
+      } catch (err: any) {
+        setError(err.message);
+      }
+    },
+    [room, isHost]
+  );
+
+  // Step 4: Finish guessing and crown Winner 1
+  const finishGuessingAndCrownWinner = useCallback(async () => {
+    if (!room || !isHost) return;
+    try {
+      await gameService.calculateAndCrownWinner(room.id, playerList);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, [room, isHost, playerList]);
 
   // Winner 1 picks Winner 2
   const pickSecondWinner = useCallback(
     async (selectedPlayerId: string) => {
       if (!room || !room.winner1Id || currentPlayerId !== room.winner1Id) return;
       try {
-        // Find the first player who is NOT safe (not Winner 1) to start the reveal queue
         const revealPlayers = playerList.filter((p) => p.id !== room.winner1Id);
         const firstRevealId = revealPlayers[0]?.id || null;
 
@@ -234,7 +239,6 @@ export function useGameState() {
   const nextConfession = useCallback(async () => {
     if (!room || !isHost) return;
     try {
-      // Find eligible reveal players (everyone except Winner 1 who is safe)
       const eligiblePlayers = playerList.filter((p) => !p.isSafe);
       const currentIndex = eligiblePlayers.findIndex((p) => p.id === room.activeAudioPlayerId);
 
@@ -244,7 +248,6 @@ export function useGameState() {
           activeAudioPlayerId: nextPlayer.id,
         });
       } else {
-        // All confessions revealed
         await gameService.updateRoom(room.id, {
           activeAudioPlayerId: null,
         });
@@ -262,7 +265,8 @@ export function useGameState() {
         await gameService.updatePlayer(p.id, {
           audioUrl: null,
           hasRecorded: false,
-          reactionTimeMs: null,
+          recognitionScore: 0,
+          correctGuessesCount: 0,
           isSafe: false,
         });
       }
@@ -272,7 +276,11 @@ export function useGameState() {
         winner1Id: null,
         winner2Id: null,
         activeAudioPlayerId: null,
-        minigameTargetTime: null,
+        currentBreakoutRound: 0,
+        currentBreakoutEndTime: null,
+        breakoutSchedule: null,
+        anonymousAudioQueue: null,
+        currentGuessIndex: 0,
       });
     } catch (err: any) {
       setError(err.message);
@@ -296,10 +304,12 @@ export function useGameState() {
         id: botId,
         roomId: room.id,
         name: botName,
-        audioUrl: null,
+        audioUrl: 'https://actions.google.com/sounds/v1/human_voices/applause.ogg',
         hasRecorded: true,
         score: 0,
-        reactionTimeMs: Math.floor(Math.random() * 250) + 260,
+        reactionTimeMs: 300,
+        recognitionScore: 0,
+        correctGuessesCount: 0,
         isSafe: false,
         createdAt: new Date().toISOString(),
       };
@@ -326,8 +336,12 @@ export function useGameState() {
     joinRoom,
     startRecordingPhase,
     submitAudio,
-    startMinigame,
-    submitReaction,
+    startBreakoutRounds,
+    advanceBreakoutRound,
+    startGuessingStage,
+    submitVoiceGuess,
+    advanceGuessVoice,
+    finishGuessingAndCrownWinner,
     pickSecondWinner,
     nextConfession,
     playAgain,

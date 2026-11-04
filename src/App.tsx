@@ -3,7 +3,8 @@ import { Navbar } from './components/Navbar';
 import { LandingStage } from './components/LandingStage';
 import { LobbyStage } from './components/LobbyStage';
 import { RecordingStage } from './components/RecordingStage';
-import { MinigameStage } from './components/MinigameStage';
+import { BreakoutStage } from './components/BreakoutStage';
+import { GuessingStage } from './components/GuessingStage';
 import { PickingStage } from './components/PickingStage';
 import { RevealStage } from './components/RevealStage';
 
@@ -22,8 +23,12 @@ export function App() {
     joinRoom,
     startRecordingPhase,
     submitAudio,
-    startMinigame,
-    submitReaction,
+    startBreakoutRounds,
+    advanceBreakoutRound,
+    startGuessingStage,
+    submitVoiceGuess,
+    advanceGuessVoice,
+    finishGuessingAndCrownWinner,
     pickSecondWinner,
     nextConfession,
     playAgain,
@@ -72,16 +77,26 @@ export function App() {
             isHost={isHost}
             allRecorded={allRecorded}
             onSubmitAudio={submitAudio}
-            onProceedToMinigame={startMinigame}
+            onProceedToMinigame={startBreakoutRounds}
           />
-        ) : room.status === 'MINIGAME' ? (
-          <MinigameStage
+        ) : room.status === 'BREAKOUT' ? (
+          <BreakoutStage
             room={room}
             players={playerList}
             currentPlayer={currentPlayer}
             isHost={isHost}
-            onStartMinigame={startMinigame}
-            onSubmitReaction={submitReaction}
+            onAdvanceRound={advanceBreakoutRound}
+            onFinishBreakouts={startGuessingStage}
+          />
+        ) : room.status === 'GUESSING' ? (
+          <GuessingStage
+            room={room}
+            players={playerList}
+            currentPlayer={currentPlayer}
+            isHost={isHost}
+            onSubmitGuess={submitVoiceGuess}
+            onAdvanceVoice={advanceGuessVoice}
+            onFinishGuessing={finishGuessingAndCrownWinner}
           />
         ) : room.status === 'PICKING' ? (
           <PickingStage
@@ -108,7 +123,7 @@ export function App() {
       {/* Footer */}
       <footer className="border-t border-slate-900 py-4 px-4 text-center text-xs text-slate-500">
         <p>
-          Confession Roulette (Safe & Sound) • Cloud Real-time Multiplayer powered by Supabase
+          Confession Roulette (Safe & Sound) • Speed Talk Breakouts, Blind Guessing & Real-Time Voice Synchronization
         </p>
       </footer>
     </div>

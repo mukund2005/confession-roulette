@@ -318,15 +318,15 @@ export const RecordingStage: React.FC<RecordingStageProps> = ({
                 type="button"
                 onClick={onProceedToMinigame}
                 disabled={!allRecorded}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-rose-600 via-rose-500 to-amber-500 hover:from-rose-500 hover:to-amber-400 text-white font-bold text-sm tracking-wide shadow-lg shadow-rose-950/40 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-600 via-teal-500 to-emerald-500 hover:from-cyan-500 hover:to-emerald-400 text-white font-bold text-sm tracking-wide shadow-lg shadow-cyan-950/40 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                <span>Proceed to Minigame</span>
+                <span>Launch Speed Talk Breakouts</span>
                 <ArrowRight className="h-4 w-4" />
               </button>
             ) : (
               <p className="text-center text-xs text-slate-400">
                 {allRecorded
-                  ? 'All confessions locked! Waiting for host to launch the reflex duel...'
+                  ? 'All confessions locked! Waiting for host to launch Speed Talk Breakouts...'
                   : 'Waiting for all players to finish recording...'}
               </p>
             )}
