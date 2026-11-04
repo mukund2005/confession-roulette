@@ -22,6 +22,20 @@ export const LandingStage: React.FC<LandingStageProps> = ({
   const [roomCode, setRoomCode] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Auto-detect join query param from URL
+  React.useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const joinParam = params.get('join');
+      if (joinParam) {
+        setRoomCode(joinParam.toUpperCase());
+        setMode('join');
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);

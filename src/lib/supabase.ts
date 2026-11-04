@@ -1,5 +1,19 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
+if (typeof window !== 'undefined') {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const sbUrl = params.get('sb_url');
+    const sbKey = params.get('sb_key');
+    if (sbUrl && sbKey) {
+      localStorage.setItem('cr_supabase_url', sbUrl);
+      localStorage.setItem('cr_supabase_anon_key', sbKey);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 const envUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 

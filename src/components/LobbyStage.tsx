@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Crown, Users, Play, Copy, Check, Bot } from 'lucide-react';
+import { Crown, Users, Play, Copy, Check, Bot, Share2 } from 'lucide-react';
 import type { Player, Room } from '../types/game';
 
 interface LobbyStageProps {
@@ -20,12 +20,26 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
   onAddBot,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
 
   const copyCode = () => {
     navigator.clipboard.writeText(room.roomCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copyInviteLink = () => {
+    const origin = window.location.origin;
+    let link = `${origin}/?join=${room.roomCode}`;
+    const customUrl = localStorage.getItem('cr_supabase_url');
+    const customKey = localStorage.getItem('cr_supabase_anon_key');
+    if (customUrl && customKey) {
+      link += `&sb_url=${encodeURIComponent(customUrl)}&sb_key=${encodeURIComponent(customKey)}`;
+    }
+    navigator.clipboard.writeText(link);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
   };
 
   const handleStart = async () => {
@@ -67,26 +81,43 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
+          <button
+            onClick={copyInviteLink}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-gradient-to-r from-rose-600 via-rose-500 to-amber-500 hover:from-rose-500 hover:to-amber-400 text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-md shadow-rose-950/40"
+            title="Share full invite link that auto-joins the room"
+          >
+            {copiedLink ? (
+              <>
+                <Check className="h-4 w-4" />
+                <span>Link Copied!</span>
+              </>
+            ) : (
+              <>
+                <Share2 className="h-4 w-4" />
+                <span>Share Link</span>
+              </>
+            )}
+          </button>
           <button
             onClick={copyCode}
-            className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold border border-slate-700 transition-all active:scale-95 shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold border border-slate-700 transition-all active:scale-95 shadow-sm"
           >
             {copied ? (
               <>
                 <Check className="h-4 w-4 text-emerald-400" />
-                <span>Code Copied!</span>
+                <span>Copied</span>
               </>
             ) : (
               <>
                 <Copy className="h-4 w-4 text-slate-300" />
-                <span>Copy Code</span>
+                <span>Code</span>
               </>
             )}
           </button>
           <button
             onClick={handleAddDemoBot}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800/60 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-medium border border-slate-700/60 transition-all"
+            className="flex items-center gap-1.5 px-2.5 py-2 bg-slate-800/60 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-medium border border-slate-700/60 transition-all"
             title="Add simulated player for quick testing"
           >
             <Bot className="h-4 w-4 text-cyan-400" />

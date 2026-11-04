@@ -1,5 +1,6 @@
 -- ==============================================================================
 -- CONFESSION ROULETTE (SAFE & SOUND) SUPABASE SCHEMA
+-- Complete, Idempotent, High-Reliability Setup for Multi-Device Play
 -- ==============================================================================
 
 -- 1. Enable UUID extension
@@ -31,63 +32,67 @@ create table if not exists public.players (
   created_at timestamptz default now()
 );
 
--- 4. Create Indexes
+-- 4. Enable Replica Identity for Complete Realtime Updates
+alter table public.rooms replica identity full;
+alter table public.players replica identity full;
+
+-- 5. Create Indexes for fast lookup
 create index if not exists idx_rooms_code on public.rooms(room_code);
 create index if not exists idx_players_room on public.players(room_id);
 
--- 5. Enable Row Level Security (RLS)
+-- 6. Grant Permissions to anon & authenticated roles
+grant usage on schema public to anon, authenticated;
+grant all on table public.rooms to anon, authenticated;
+grant all on table public.players to anon, authenticated;
+
+-- 7. Enable Row Level Security (RLS)
 alter table public.rooms enable row level security;
 alter table public.players enable row level security;
 
--- Free/Party Game Open RLS Policies (allows players to join and synchronize without strict OAuth auth requirement)
-create policy "Allow all public read on rooms" 
-  on public.rooms for select 
-  using (true);
+-- Drop existing policies if re-running
+drop policy if exists "Allow all public read on rooms" on public.rooms;
+drop policy if exists "Allow public insert on rooms" on public.rooms;
+drop policy if exists "Allow public update on rooms" on public.rooms;
 
-create policy "Allow public insert on rooms" 
-  on public.rooms for insert 
-  with check (true);
+drop policy if exists "Allow all public read on players" on public.players;
+drop policy if exists "Allow public insert on players" on public.players;
+drop policy if exists "Allow public update on players" on public.players;
+drop policy if exists "Allow public delete on players" on public.players;
 
-create policy "Allow public update on rooms" 
-  on public.rooms for update 
-  using (true);
+-- Open policies for seamless party game room sync
+create policy "Allow all public read on rooms" on public.rooms for select using (true);
+create policy "Allow public insert on rooms" on public.rooms for insert with check (true);
+create policy "Allow public update on rooms" on public.rooms for update using (true);
 
-create policy "Allow all public read on players" 
-  on public.players for select 
-  using (true);
+create policy "Allow all public read on players" on public.players for select using (true);
+create policy "Allow public insert on players" on public.players for insert with check (true);
+create policy "Allow public update on players" on public.players for update using (true);
+create policy "Allow public delete on players" on public.players for delete using (true);
 
-create policy "Allow public insert on players" 
-  on public.players for insert 
-  with check (true);
+-- 8. Add Tables to Realtime Publication Safely
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'rooms') then
+    alter publication supabase_realtime add table public.rooms;
+  end if;
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'players') then
+    alter publication supabase_realtime add table public.players;
+  end if;
+exception when others then
+  -- In case publication doesn't exist, create it
+  null;
+end $$;
 
-create policy "Allow public update on players" 
-  on public.players for update 
-  using (true);
-
-create policy "Allow public delete on players" 
-  on public.players for delete 
-  using (true);
-
--- 6. Enable Realtime Publications
--- Add rooms and players tables to supabase_realtime publication
-alter publication supabase_realtime add table public.rooms;
-alter publication supabase_realtime add table public.players;
-
--- 7. Storage Bucket Setup
--- Insert bucket for confessions if not exists
+-- 9. Storage Bucket Setup
 insert into storage.buckets (id, name, public)
 values ('confessions', 'confessions', true)
 on conflict (id) do update set public = true;
 
--- Storage policies for audio uploads
-create policy "Public Access to Confession Audios" 
-  on storage.objects for select 
-  using (bucket_id = 'confessions');
+-- Drop and recreate storage policies
+drop policy if exists "Public Access to Confession Audios" on storage.objects;
+drop policy if exists "Public Upload of Confession Audios" on storage.objects;
+drop policy if exists "Public Update of Confession Audios" on storage.objects;
 
-create policy "Public Upload of Confession Audios" 
-  on storage.objects for insert 
-  with check (bucket_id = 'confessions');
-
-create policy "Public Update of Confession Audios" 
-  on storage.objects for update 
-  using (bucket_id = 'confessions');
+create policy "Public Access to Confession Audios" on storage.objects for select using (bucket_id = 'confessions');
+create policy "Public Upload of Confession Audios" on storage.objects for insert with check (bucket_id = 'confessions');
+create policy "Public Update of Confession Audios" on storage.objects for update using (bucket_id = 'confessions');
