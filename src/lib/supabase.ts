@@ -11,6 +11,7 @@ const SUPABASE_KEY =
   'sb_publishable_cLbqdlGF9XTdZFgENLhUqw_oshw8kKj';
 
 export const isSupabaseConfigured = true;
+export { SUPABASE_URL, SUPABASE_KEY };
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   realtime: {

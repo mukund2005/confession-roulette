@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, HelpCircle } from 'lucide-react';
 import { audioTheme } from '../utils/audioTheme';
+import { HowToPlayModal } from './HowToPlayModal';
 
 interface LandingStageProps {
   onQuickMatch: (playerName: string) => Promise<void>;
@@ -19,7 +20,7 @@ export const LandingStage: React.FC<LandingStageProps> = ({
 }) => {
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState('');
-  const [activeModal, setActiveModal] = useState<'none' | 'host' | 'join'>('none');
+  const [activeModal, setActiveModal] = useState<'none' | 'host' | 'join' | 'howToPlay'>('none');
   const [isLocating, setIsLocating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -186,6 +187,19 @@ export const LandingStage: React.FC<LandingStageProps> = ({
                 JOIN BONFIRE
               </button>
             </div>
+
+            {/* How to Play Guide Button */}
+            <button
+              type="button"
+              onClick={() => {
+                audioTheme.playClickSound();
+                setActiveModal('howToPlay');
+              }}
+              className="text-xs text-amber-300/80 hover:text-amber-200 font-serif tracking-wider uppercase flex items-center gap-1.5 transition-all px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 hover:border-amber-500/40 active:scale-95 shadow-sm"
+            >
+              <HelpCircle className="h-3.5 w-3.5 text-amber-400" />
+              <span>How To Play & Game Rules</span>
+            </button>
           </div>
         )}
       </div>
@@ -272,6 +286,12 @@ export const LandingStage: React.FC<LandingStageProps> = ({
           </div>
         </div>
       )}
+
+      {/* How to Play Modal */}
+      <HowToPlayModal
+        isOpen={activeModal === 'howToPlay'}
+        onClose={() => setActiveModal('none')}
+      />
     </div>
   );
 };

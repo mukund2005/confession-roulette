@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Copy, Check, LogOut, Shield, Flame, Volume2, VolumeX } from 'lucide-react';
+import { Copy, Check, LogOut, Shield, Flame, Volume2, VolumeX, HelpCircle } from 'lucide-react';
 import type { Player, Room } from '../types/game';
 import { audioTheme } from '../utils/audioTheme';
+import { HowToPlayModal } from './HowToPlayModal';
 
 interface NavbarProps {
   room: Room | null;
@@ -16,6 +17,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [isMuted, setIsMuted] = useState(audioTheme.getIsMuted());
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
 
   const copyRoomCode = () => {
     audioTheme.playClickSound();
@@ -91,6 +93,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
 
+          {/* How to Play Guide Button */}
+          <button
+            onClick={() => {
+              audioTheme.playClickSound();
+              setShowHowToPlay(true);
+            }}
+            className="p-1.5 sm:p-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-all flex items-center gap-1.5 text-xs font-serif"
+            title="How to Play Rupiko"
+          >
+            <HelpCircle className="h-4 w-4 text-amber-400" />
+            <span className="hidden md:inline">Rules</span>
+          </button>
+
           {/* Bonfire Audio Ambience Toggle */}
           <button
             onClick={handleToggleAudio}
@@ -124,6 +139,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </div>
       </div>
+
+      {/* How to Play Rules Guide Modal */}
+      <HowToPlayModal
+        isOpen={showHowToPlay}
+        onClose={() => setShowHowToPlay(false)}
+      />
     </header>
   );
 };

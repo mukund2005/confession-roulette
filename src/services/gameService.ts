@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, SUPABASE_URL, SUPABASE_KEY } from '../lib/supabase';
 import type { Player, Room, Guess, AnonymousVoice } from '../types/game';
 import { generateRoundRobinSchedule } from '../utils/roundRobin';
 
@@ -268,6 +268,25 @@ export const gameService = {
     }
   },
 
+  // Synchronous keepalive deletion for tab close / pagehide
+  sendKeepaliveLeave(playerId: string) {
+    try {
+      const url = `${SUPABASE_URL}/rest/v1/players?id=eq.${playerId}`;
+      fetch(url, {
+        method: 'DELETE',
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+        keepalive: true,
+      }).catch(() => {});
+    } catch (e) {
+      console.warn('Keepalive leave failed:', e);
+    }
+  },
+
   // Step 2: Initialize Speed Talk WebRTC Breakouts
   async startSpeedTalkBreakouts(roomId: string, playerIds: string[]): Promise<void> {
     const schedule = generateRoundRobinSchedule(playerIds);
@@ -427,7 +446,8 @@ export const gameService = {
     playerId: string,
     onRoomChange: (room: Room) => void,
     onPlayersChange: (players: Record<string, Player>) => void,
-    onPlayerDisconnect?: (disconnectedPlayerId: string) => void
+    onPlayerDisconnect?: (disconnectedPlayerId: string) => void,
+    onPresenceSync?: (activePresenceKeys: string[]) => void
   ): () => void {
     const fetchLatest = async () => {
       const { data: roomData } = await supabase.from('rooms').select('*').eq('id', roomId).maybeSingle();
@@ -472,16 +492,30 @@ export const gameService = {
           fetchLatest();
         }
       )
-      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+      .on('presence', { event: 'sync' }, () => {
+        try {
+          const state = channel.presenceState();
+          const activeKeys = Object.keys(state);
+          onPresenceSync?.(activeKeys);
+        } catch {
+          // ignore
+        }
+      })
+      .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
         // Automatically kick out disconnected campers
+        const candidateKeys: string[] = [];
+        if (key) candidateKeys.push(key);
         if (leftPresences && Array.isArray(leftPresences)) {
           leftPresences.forEach((p: any) => {
-            const leftId = p.playerId || p.key;
-            if (leftId && leftId !== playerId) {
-              onPlayerDisconnect?.(leftId);
-            }
+            const id = p.playerId || p.key;
+            if (id) candidateKeys.push(id);
           });
         }
+        candidateKeys.forEach((leftId) => {
+          if (leftId && leftId !== playerId) {
+            onPlayerDisconnect?.(leftId);
+          }
+        });
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
