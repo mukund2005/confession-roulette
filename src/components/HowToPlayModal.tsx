@@ -22,7 +22,7 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ isOpen, onClose 
       icon: Flame,
       color: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
       description:
-        '6 real campers take their seats around the campfire. Use Quick Match or share your 4-letter bonfire code. The fire ignites automatically as soon as all 6 seats are filled!',
+        '4 real campers take their seats around the campfire. Use Quick Match or share your 4-letter bonfire code. The fire ignites automatically as soon as all 4 seats are filled!',
     },
     {
       num: '2',
@@ -30,7 +30,7 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ isOpen, onClose 
       icon: Mic,
       color: 'text-rose-400 bg-rose-500/10 border-rose-500/30',
       description:
-        'Receive a secret spicy confession prompt and record your voice confession into your mic. Tip: Disguise your pitch, cadence, or accent so others cannot recognize you! Breakouts start immediately when all 6 campers seal their secrets.',
+        'Receive a secret spicy confession prompt and record your voice confession into your mic. Tip: Disguise your pitch, cadence, or accent so others cannot recognize you! Breakouts start immediately when all 4 campers seal their secrets.',
     },
     {
       num: '3',

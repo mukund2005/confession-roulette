@@ -1,4 +1,5 @@
 import { supabase, SUPABASE_URL, SUPABASE_KEY } from '../lib/supabase';
+import { MAX_PLAYERS } from '../types/game';
 import type { Player, Room, Guess, AnonymousVoice } from '../types/game';
 import { generateRoundRobinSchedule } from '../utils/roundRobin';
 
@@ -61,7 +62,7 @@ export const gameService = {
     };
   },
 
-  // Quick Match: Find an open public bonfire with < 6 players, or create one
+  // Quick Match: Find an open public bonfire with < MAX_PLAYERS, or create one
   async findOrCreatePublicBonfire(playerName: string): Promise<{ room: Room; player: Player }> {
     const { data: openRooms, error } = await supabase
       .from('rooms')
@@ -74,7 +75,7 @@ export const gameService = {
     if (!error && openRooms && openRooms.length > 0) {
       for (const r of openRooms) {
         const count = r.players ? r.players.length : 0;
-        if (count < 6) {
+        if (count < MAX_PLAYERS) {
           try {
             return await this.joinRoom(r.room_code, playerName);
           } catch {
@@ -87,7 +88,7 @@ export const gameService = {
     return await this.createRoom(playerName);
   },
 
-  // Start play: real 6-player matchmaking without bots
+  // Start play: real 4-player matchmaking without bots
   async startSoloPlay(playerName: string): Promise<{ room: Room; player: Player }> {
     return this.findOrCreatePublicBonfire(playerName);
   },
@@ -160,14 +161,14 @@ export const gameService = {
       throw new Error('Game has already started in this room.');
     }
 
-    // Strict 6-member maximum cap restriction
+    // Strict MAX_PLAYERS maximum cap restriction
     const { count: currentCampersCount } = await supabase
       .from('players')
       .select('*', { count: 'exact', head: true })
       .eq('room_id', roomData.id);
 
-    if (currentCampersCount !== null && currentCampersCount >= 6) {
-      throw new Error('This bonfire is full (maximum 6 campers allowed). Please join or host another bonfire.');
+    if (currentCampersCount !== null && currentCampersCount >= MAX_PLAYERS) {
+      throw new Error(`This bonfire is full (maximum ${MAX_PLAYERS} campers allowed). Please join or host another bonfire.`);
     }
 
     const { data: playerData, error: playerError } = await supabase

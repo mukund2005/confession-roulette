@@ -2,7 +2,7 @@ import type { BreakoutRound, BreakoutPair } from '../types/game';
 
 /**
  * Computes a standard round-robin tournament schedule.
- * For N players (e.g., 6 players), produces N-1 rounds (5 rounds)
+ * For N players (e.g., 4 players), produces N-1 rounds (3 rounds)
  * where every player is paired with every other player exactly once.
  */
 export function generateRoundRobinSchedule(playerIds: string[]): BreakoutRound[] {

@@ -1,3 +1,5 @@
+export const MAX_PLAYERS = 4;
+
 export type GameStatus =
   | 'LOBBY'
   | 'RECORDING'

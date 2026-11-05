@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Crown, Users, Play, Copy, Check, Share2, Flame, Sparkles } from 'lucide-react';
-import type { Player, Room } from '../types/game';
+import { MAX_PLAYERS, type Player, type Room } from '../types/game';
 import { audioTheme } from '../utils/audioTheme';
 
 interface LobbyStageProps {
@@ -52,7 +52,7 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
       try {
         await navigator.share({
           title: 'Join my Rupiko Bonfire!',
-          text: `Join our circle of 6 campers around the bonfire! Code: ${room.roomCode}`,
+          text: `Join our circle of ${MAX_PLAYERS} campers around the bonfire! Code: ${room.roomCode}`,
           url: link,
         });
         return;
@@ -76,9 +76,9 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
     }
   };
 
-  // Automatic Game Start when 6 real campers are seated
+  // Automatic Game Start when MAX_PLAYERS real campers are seated
   useEffect(() => {
-    if (players.length < 6) {
+    if (players.length < MAX_PLAYERS) {
       targetTimeRef.current = null;
       setAutoCountdown(null);
       return;
@@ -106,7 +106,7 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
     return () => clearInterval(interval);
   }, [players.length]);
 
-  const isFullCircle = players.length >= 6;
+  const isFullCircle = players.length >= MAX_PLAYERS;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-4 max-w-4xl mx-auto font-serif">
@@ -121,12 +121,12 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
           <Flame className="h-3.5 w-3.5" /> Gathering Around The Bonfire
         </span>
         <h1 className="text-3xl sm:text-4xl font-serif text-white mt-2">
-          {players.length} / 6 Campers Seated
+          {players.length} / {MAX_PLAYERS} Campers Seated
         </h1>
         <p className="text-white/60 text-xs sm:text-sm mt-1 max-w-md mx-auto">
           {isFullCircle
-            ? 'All 6 real campers seated around the fire! Starting automatically...'
-            : 'Share the bonfire code with 5 friends. The game automatically ignites when 6 players are seated.'}
+            ? `All ${MAX_PLAYERS} real campers seated around the fire! Starting automatically...`
+            : `Share the bonfire code with ${MAX_PLAYERS - 1} friends. The game automatically ignites when ${MAX_PLAYERS} players are seated.`}
         </p>
       </div>
 
@@ -178,19 +178,19 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
         </div>
       </div>
 
-      {/* Connected Campers Grid (Up to 6) */}
+      {/* Connected Campers Grid (Up to MAX_PLAYERS) */}
       <div className="w-full max-w-2xl bg-[#121214]/80 border border-white/10 rounded-2xl p-6 mb-6">
         <div className="flex items-center justify-between mb-4 font-sans">
           <div className="flex items-center gap-2 text-xs font-bold text-white/80 uppercase tracking-wider">
             <Users className="h-4 w-4 text-amber-400" />
-            <span>Circle of Campers ({players.length} / 6)</span>
+            <span>Circle of Campers ({players.length} / {MAX_PLAYERS})</span>
           </div>
           <span className="text-[11px] text-amber-400 font-medium">
-            {6 - players.length > 0 ? `${6 - players.length} seats remaining` : 'Full Circle'}
+            {MAX_PLAYERS - players.length > 0 ? `${MAX_PLAYERS - players.length} seats remaining` : 'Full Circle'}
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           {players.map((player) => {
             const isPlayerHost = player.id === room.hostId;
             const isMe = player.id === currentPlayer?.id;
@@ -242,8 +242,8 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
             );
           })}
 
-          {/* Empty Seats Placeholders up to 6 */}
-          {Array.from({ length: Math.max(0, 6 - players.length) }).map((_, idx) => (
+          {/* Empty Seats Placeholders up to MAX_PLAYERS */}
+          {Array.from({ length: Math.max(0, MAX_PLAYERS - players.length) }).map((_, idx) => (
             <div
               key={`empty-${idx}`}
               className="flex items-center gap-2.5 p-3 rounded-xl border border-dashed border-white/10 bg-black/30 opacity-40 font-sans"
@@ -260,12 +260,12 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
       {/* Auto-Start Status or Countdown */}
       <div className="w-full max-w-md">
         {autoCountdown !== null ? (
-          /* Auto-Countdown notification when 6 campers are seated */
+          /* Auto-Countdown notification when MAX_PLAYERS campers are seated */
           <div className="text-center p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 animate-pulse">
             <div className="flex items-center justify-center gap-2 mb-1">
               <Sparkles className="h-4 w-4 text-amber-400" />
               <span className="text-xs font-serif uppercase tracking-widest font-bold">
-                Circle of 6 Complete
+                Circle of {MAX_PLAYERS} Complete
               </span>
             </div>
             <div className="text-2xl font-serif font-black text-white my-1">
@@ -302,7 +302,7 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
             ) : (
               <>
                 <Play className="h-4 w-4 fill-current" />
-                <span>Ignite Bonfire ({players.length}/6 Campers)</span>
+                <span>Ignite Bonfire ({players.length}/{MAX_PLAYERS} Campers)</span>
               </>
             )}
           </button>
@@ -311,11 +311,11 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
             <div className="flex items-center justify-center gap-2 text-amber-400 mb-1">
               <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
               <span className="text-xs font-serif uppercase tracking-wider">
-                Waiting for 6 campers to be seated...
+                Waiting for {MAX_PLAYERS} campers to be seated...
               </span>
             </div>
             <p className="text-xs text-white/50 font-sans">
-              The bonfire automatically ignites once all 6 seats are filled.
+              The bonfire automatically ignites once all {MAX_PLAYERS} seats are filled.
             </p>
           </div>
         )}

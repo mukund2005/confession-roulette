@@ -158,7 +158,7 @@ export const LandingStage: React.FC<LandingStageProps> = ({
               LOCATING THE BONFIRE...
             </h2>
             <p className="text-xs text-white/60 tracking-wider">
-              Gathering 6 campers from the internet to sit around the fire
+              Gathering 4 campers from the internet to sit around the fire
             </p>
           </div>
         ) : (

@@ -135,7 +135,7 @@ export function useGameState() {
     return playerList.every((p) => p.hasRecorded);
   }, [playerList]);
 
-  // Quick Match action for real 6-player matchmaking
+  // Quick Match action for real 4-player matchmaking
   const quickMatch = useCallback(async (playerName: string) => {
     setIsLoading(true);
     setError(null);
