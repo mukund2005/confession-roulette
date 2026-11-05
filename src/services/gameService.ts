@@ -63,7 +63,7 @@ export const gameService = {
   },
 
   // Quick Match: Find an open public bonfire with < MAX_PLAYERS, or create one
-  async findOrCreatePublicBonfire(playerName: string): Promise<{ room: Room; player: Player }> {
+  async findOrCreatePublicBonfire(playerName: string): Promise<{ room: Room; player: Player; allPlayers: Player[] }> {
     const { data: openRooms, error } = await supabase
       .from('rooms')
       .select('*, players(*)')
@@ -75,7 +75,7 @@ export const gameService = {
     if (!error && openRooms && openRooms.length > 0) {
       for (const r of openRooms) {
         const count = r.players ? r.players.length : 0;
-        if (count < MAX_PLAYERS) {
+        if (count > 0 && count < MAX_PLAYERS) {
           try {
             return await this.joinRoom(r.room_code, playerName);
           } catch {
@@ -89,12 +89,12 @@ export const gameService = {
   },
 
   // Start play: real 4-player matchmaking without bots
-  async startSoloPlay(playerName: string): Promise<{ room: Room; player: Player }> {
+  async startSoloPlay(playerName: string): Promise<{ room: Room; player: Player; allPlayers: Player[] }> {
     return this.findOrCreatePublicBonfire(playerName);
   },
 
   // Create a room in Supabase
-  async createRoom(hostName: string): Promise<{ room: Room; player: Player }> {
+  async createRoom(hostName: string): Promise<{ room: Room; player: Player; allPlayers: Player[] }> {
     const hostId = crypto.randomUUID();
     const roomCode = this.generateRoomCode();
 
@@ -104,6 +104,7 @@ export const gameService = {
         room_code: roomCode,
         status: 'LOBBY',
         host_id: hostId,
+        is_public: true,
       })
       .select()
       .single();
@@ -131,14 +132,16 @@ export const gameService = {
       throw new Error(`Failed to create host player: ${playerError.message}`);
     }
 
+    const player = this.mapPlayer(playerData);
     return {
       room: this.mapRoom(roomData),
-      player: this.mapPlayer(playerData),
+      player,
+      allPlayers: [player],
     };
   },
 
   // Join an existing room
-  async joinRoom(roomCode: string, playerName: string): Promise<{ room: Room; player: Player }> {
+  async joinRoom(roomCode: string, playerName: string): Promise<{ room: Room; player: Player; allPlayers: Player[] }> {
     const formattedCode = roomCode.trim().toUpperCase();
     const playerId = crypto.randomUUID();
 
@@ -189,9 +192,20 @@ export const gameService = {
       throw new Error(`Failed to join room: ${playerError.message}`);
     }
 
+    // Fetch all players currently seated in this room so the joining player immediately has the full circle
+    const { data: allPlayersData } = await supabase
+      .from('players')
+      .select('*')
+      .eq('room_id', roomData.id);
+
+    const allPlayers = allPlayersData && allPlayersData.length > 0
+      ? allPlayersData.map((p) => this.mapPlayer(p))
+      : [this.mapPlayer(playerData)];
+
     return {
       room: this.mapRoom(roomData),
       player: this.mapPlayer(playerData),
+      allPlayers,
     };
   },
 
@@ -542,7 +556,8 @@ export const gameService = {
 
     fetchLatest();
 
-    const channel = supabase.channel(`room:${roomId}`, {
+    const channelName = `room:${roomId}:${playerId}`;
+    const channel = supabase.channel(channelName, {
       config: {
         presence: {
           key: playerId,

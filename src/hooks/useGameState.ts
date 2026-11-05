@@ -12,10 +12,10 @@ export function useGameState() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Restore session from localStorage on mount if available
+  // Restore session from sessionStorage on mount if available
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(SAVED_SESSION_KEY);
+      const saved = sessionStorage.getItem(SAVED_SESSION_KEY);
       if (saved) {
         const { roomId, playerId } = JSON.parse(saved);
         if (roomId && playerId) {
@@ -30,7 +30,7 @@ export function useGameState() {
   // Save session whenever roomId and playerId change
   useEffect(() => {
     if (room && currentPlayerId) {
-      localStorage.setItem(
+      sessionStorage.setItem(
         SAVED_SESSION_KEY,
         JSON.stringify({ roomId: room.id, playerId: currentPlayerId })
       );
@@ -131,9 +131,13 @@ export function useGameState() {
     setIsLoading(true);
     setError(null);
     try {
-      const { room: matchedRoom, player: newPlayer } = await gameService.findOrCreatePublicBonfire(playerName);
+      const { room: matchedRoom, player: newPlayer, allPlayers } = await gameService.findOrCreatePublicBonfire(playerName);
       setRoom(matchedRoom);
-      setPlayers({ [newPlayer.id]: newPlayer });
+      const playerMap: Record<string, Player> = {};
+      allPlayers.forEach((p) => {
+        playerMap[p.id] = p;
+      });
+      setPlayers(playerMap);
       setCurrentPlayerId(newPlayer.id);
     } catch (err: any) {
       setError(err.message || 'Failed to locate bonfire');
@@ -148,9 +152,13 @@ export function useGameState() {
     setIsLoading(true);
     setError(null);
     try {
-      const { room: newRoom, player: newPlayer } = await gameService.createRoom(hostName);
+      const { room: newRoom, player: newPlayer, allPlayers } = await gameService.createRoom(hostName);
       setRoom(newRoom);
-      setPlayers({ [newPlayer.id]: newPlayer });
+      const playerMap: Record<string, Player> = {};
+      allPlayers.forEach((p) => {
+        playerMap[p.id] = p;
+      });
+      setPlayers(playerMap);
       setCurrentPlayerId(newPlayer.id);
     } catch (err: any) {
       setError(err.message || 'Failed to create room');
@@ -165,9 +173,13 @@ export function useGameState() {
     setIsLoading(true);
     setError(null);
     try {
-      const { room: joinedRoom, player: newPlayer } = await gameService.joinRoom(roomCode, playerName);
+      const { room: joinedRoom, player: newPlayer, allPlayers } = await gameService.joinRoom(roomCode, playerName);
       setRoom(joinedRoom);
-      setPlayers((prev) => ({ ...prev, [newPlayer.id]: newPlayer }));
+      const playerMap: Record<string, Player> = {};
+      allPlayers.forEach((p) => {
+        playerMap[p.id] = p;
+      });
+      setPlayers(playerMap);
       setCurrentPlayerId(newPlayer.id);
     } catch (err: any) {
       setError(err.message || 'Failed to join room');
@@ -555,27 +567,11 @@ export function useGameState() {
         console.warn('Error leaving room:', e);
       }
     }
-    localStorage.removeItem(SAVED_SESSION_KEY);
+    sessionStorage.removeItem(SAVED_SESSION_KEY);
     setRoom(null);
     setPlayers({});
     setCurrentPlayerId(null);
   }, [room, currentPlayerId]);
-
-  // Clean up player presence on browser tab/window close
-  useEffect(() => {
-    const handleTabClose = () => {
-      if (roomRef.current?.status === 'LOBBY' && currentPlayerId) {
-        localStorage.removeItem(SAVED_SESSION_KEY);
-        gameService.sendKeepaliveLeave(currentPlayerId);
-      }
-    };
-
-    window.addEventListener('beforeunload', handleTabClose);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleTabClose);
-    };
-  }, [currentPlayerId]);
 
   return {
     room,
