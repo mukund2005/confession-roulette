@@ -3,6 +3,7 @@ import { Navbar } from './components/Navbar';
 import { LandingStage } from './components/LandingStage';
 import { LobbyStage } from './components/LobbyStage';
 import { RecordingStage } from './components/RecordingStage';
+import { MinigameStage } from './components/MinigameStage';
 import { BreakoutStage } from './components/BreakoutStage';
 import { GuessingStage } from './components/GuessingStage';
 import { PickingStage } from './components/PickingStage';
@@ -24,7 +25,10 @@ export function App() {
     quickMatch,
     startRecordingPhase,
     submitAudio,
-    startBreakoutRounds,
+    startBalloonMinigame,
+    submitMinigameScore,
+    crownMinigameWinner,
+    proceedFromMinigameToReveal,
     advanceBreakoutRound,
     startGuessingStage,
     submitVoiceGuess,
@@ -77,7 +81,18 @@ export function App() {
             isHost={isHost}
             allRecorded={allRecorded}
             onSubmitAudio={submitAudio}
-            onProceedToMinigame={startBreakoutRounds}
+            onProceedToMinigame={startBalloonMinigame}
+          />
+        ) : room.status === 'MINIGAME' ? (
+          <MinigameStage
+            room={room}
+            players={playerList}
+            currentPlayer={currentPlayer}
+            isHost={isHost}
+            onStartMinigame={startBalloonMinigame}
+            onSubmitScore={submitMinigameScore}
+            onCrownWinner={crownMinigameWinner}
+            onProceedToReveal={proceedFromMinigameToReveal}
           />
         ) : room.status === 'BREAKOUT' ? (
           <BreakoutStage

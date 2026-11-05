@@ -60,3 +60,42 @@ test('generateRoundRobinSchedule with 2 players', () => {
     ['p1', 'p2']
   );
 });
+
+test('Balloon Popping Frenzy: Highest score wins Winner 1', () => {
+  const contestants = [
+    { id: 'camper-1', score: 14, reactionTimeMs: 1730768400000 },
+    { id: 'camper-2', score: 22, reactionTimeMs: 1730768410000 },
+    { id: 'camper-3', score: 8,  reactionTimeMs: 1730768405000 },
+    { id: 'camper-4', score: 19, reactionTimeMs: 1730768420000 },
+  ];
+
+  const sorted = [...contestants].sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    const timeA = a.reactionTimeMs ?? Number.MAX_SAFE_INTEGER;
+    const timeB = b.reactionTimeMs ?? Number.MAX_SAFE_INTEGER;
+    return timeA - timeB;
+  });
+
+  assert.strictEqual(sorted[0].id, 'camper-2', 'Player with highest score must be ranked #1');
+  assert.strictEqual(sorted[0].score, 22);
+});
+
+test('Balloon Popping Frenzy: Tie-breaker awards Winner 1 to earliest final pop', () => {
+  const t0 = 1730768400000;
+  const contestants = [
+    { id: 'camper-1', score: 25, reactionTimeMs: t0 + 28000 }, // finished last pop at 28s
+    { id: 'camper-2', score: 25, reactionTimeMs: t0 + 24500 }, // finished last pop at 24.5s (earlier!)
+    { id: 'camper-3', score: 10, reactionTimeMs: t0 + 29000 },
+    { id: 'camper-4', score: 21, reactionTimeMs: t0 + 27000 },
+  ];
+
+  const sorted = [...contestants].sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    const timeA = a.reactionTimeMs ?? Number.MAX_SAFE_INTEGER;
+    const timeB = b.reactionTimeMs ?? Number.MAX_SAFE_INTEGER;
+    return timeA - timeB;
+  });
+
+  assert.strictEqual(sorted[0].id, 'camper-2', 'Tied player who popped their final balloon first wins tie-break');
+  assert.strictEqual(sorted[1].id, 'camper-1', 'Tied player with later final pop is ranked #2');
+});

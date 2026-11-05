@@ -212,7 +212,118 @@ export function useGameState() {
     [room, currentPlayerId]
   );
 
-  // Step 2: Start the Speed Talk WebRTC Breakouts automatically
+  // Step 2: Initialize Round 1 Minigame — "Balloon Popping Frenzy" (30s synchronized clicker)
+  const startBalloonMinigame = useCallback(async () => {
+    if (!room) return;
+    try {
+      const readyDelayMs = 3000;
+      const gameDurationMs = 30000;
+      const targetEndTime = Date.now() + readyDelayMs + gameDurationMs;
+      const playerIds = playerList.map((p) => p.id);
+
+      setRoom((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'MINIGAME',
+              minigameTargetTime: targetEndTime,
+              winner1Id: null,
+              winner2Id: null,
+              activeAudioPlayerId: null,
+            }
+          : prev
+      );
+
+      await gameService.startBalloonMinigame(room.id, targetEndTime, playerIds);
+    } catch (err: any) {
+      console.error('Error starting balloon minigame:', err);
+      setError(err.message);
+    }
+  }, [room, playerList]);
+
+  // Automatically advance to Minigame when all players have sealed confessions
+  const autoMinigameTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    if (room?.status !== 'RECORDING') {
+      autoMinigameTriggeredRef.current = false;
+      return;
+    }
+
+    if (allRecorded && !autoMinigameTriggeredRef.current && isHost) {
+      autoMinigameTriggeredRef.current = true;
+      startBalloonMinigame();
+    }
+  }, [room?.status, allRecorded, isHost, startBalloonMinigame]);
+
+  // Submit client's balloon score at t = 0
+  const submitMinigameScore = useCallback(
+    async (score: number, lastPopTimeMs: number) => {
+      if (!room || !currentPlayerId) return;
+      try {
+        await gameService.submitMinigameScore(currentPlayerId, score, lastPopTimeMs);
+        setPlayers((prev) => ({
+          ...prev,
+          [currentPlayerId]: {
+            ...prev[currentPlayerId],
+            score,
+            reactionTimeMs: lastPopTimeMs,
+          },
+        }));
+      } catch (err: any) {
+        console.warn('Error submitting minigame score:', err);
+      }
+    },
+    [room, currentPlayerId]
+  );
+
+  // Crown Winner 1 based on highest score and tie-breaking
+  const crownMinigameWinner = useCallback(async () => {
+    if (!room) return;
+    try {
+      const winnerId = await gameService.crownMinigameWinner(room.id, playerList);
+      if (winnerId) {
+        setRoom((prev) => (prev ? { ...prev, winner1Id: winnerId } : prev));
+        setPlayers((prev) => {
+          if (!prev[winnerId]) return prev;
+          return {
+            ...prev,
+            [winnerId]: {
+              ...prev[winnerId],
+              isSafe: true,
+            },
+          };
+        });
+      }
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, [room, playerList]);
+
+  // Proceed from Minigame results to Synchronized Confession Listening (REVEAL)
+  const proceedFromMinigameToReveal = useCallback(async () => {
+    if (!room || !room.winner1Id) return;
+    try {
+      const eligible = playerList.filter((p) => p.id !== room.winner1Id && p.audioUrl);
+      const firstRevealId = eligible[0]?.id || null;
+
+      setRoom((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'REVEAL',
+              activeAudioPlayerId: firstRevealId,
+            }
+          : prev
+      );
+
+      await gameService.proceedFromMinigameToReveal(room.id, room.winner1Id, playerList);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, [room, playerList]);
+
+  // Step 2 Alternative: Start the Speed Talk WebRTC Breakouts automatically
   const startBreakoutRounds = useCallback(async () => {
     if (!room) return;
     try {
@@ -239,21 +350,6 @@ export function useGameState() {
       setError(err.message);
     }
   }, [room, playerList]);
-
-  // Automatically start Speed Talk Breakouts immediately when all players have sealed confessions
-  const autoBreakoutTriggeredRef = useRef(false);
-
-  useEffect(() => {
-    if (room?.status !== 'RECORDING') {
-      autoBreakoutTriggeredRef.current = false;
-      return;
-    }
-
-    if (allRecorded && !autoBreakoutTriggeredRef.current) {
-      autoBreakoutTriggeredRef.current = true;
-      startBreakoutRounds();
-    }
-  }, [room?.status, allRecorded, startBreakoutRounds]);
 
   // Advance to next breakout round
   const advanceBreakoutRound = useCallback(
@@ -436,6 +532,8 @@ export function useGameState() {
           hasRecorded: false,
           recognitionScore: 0,
           correctGuessesCount: 0,
+          score: 0,
+          reactionTimeMs: null,
           isSafe: false,
         });
       }
@@ -445,6 +543,7 @@ export function useGameState() {
         winner1Id: null,
         winner2Id: null,
         activeAudioPlayerId: null,
+        minigameTargetTime: null,
         currentBreakoutRound: 0,
         currentBreakoutEndTime: null,
         breakoutSchedule: null,
@@ -506,6 +605,10 @@ export function useGameState() {
     quickMatch,
     startRecordingPhase,
     submitAudio,
+    startBalloonMinigame,
+    submitMinigameScore,
+    crownMinigameWinner,
+    proceedFromMinigameToReveal,
     startBreakoutRounds,
     advanceBreakoutRound,
     startGuessingStage,

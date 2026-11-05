@@ -327,13 +327,13 @@ export const RecordingStage: React.FC<RecordingStageProps> = ({
           {/* Automatic Speed Talk Transition Status */}
           <div className="mt-6 pt-4 border-t border-slate-800">
             {allRecorded ? (
-              <div className="p-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-center animate-pulse">
-                <div className="text-sm font-bold text-cyan-300 flex items-center justify-center gap-2">
-                  <span className="h-4 w-4 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-center animate-pulse">
+                <div className="text-sm font-bold text-amber-300 flex items-center justify-center gap-2">
+                  <span className="h-4 w-4 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
                   <span>All {players.length} Confessions Sealed!</span>
                 </div>
                 <div className="text-xs text-slate-300 mt-1">
-                  Starting Speed Talk Breakouts now...
+                  Starting Balloon Popping Frenzy now...
                 </div>
               </div>
             ) : (
@@ -349,9 +349,9 @@ export const RecordingStage: React.FC<RecordingStageProps> = ({
                         audioTheme.playClickSound();
                         onProceedToMinigame();
                       }}
-                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-semibold rounded-xl border border-slate-700 transition-all inline-flex items-center gap-1.5 shadow-sm hover:scale-105 active:scale-95"
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-semibold rounded-xl border border-slate-700 transition-all inline-flex items-center gap-1.5 shadow-sm hover:scale-105 active:scale-95"
                     >
-                      <span>Start Speed Talk Now ({recordedCount}/{players.length} Sealed)</span>
+                      <span>Enter Balloon Frenzy Now ({recordedCount}/{players.length} Sealed)</span>
                       <ArrowRight className="h-3.5 w-3.5" />
                     </button>
                   </div>

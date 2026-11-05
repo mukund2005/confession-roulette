@@ -8,8 +8,8 @@
 
 1. **Lobby:** The host creates a 4-letter room code. Friends join on desktop or mobile by entering the room code and their display name.
 2. **Confession Stage:** Every player records a 15–30 second voice confession using their microphone. Audio is compressed into WebM/Opus blobs and securely uploaded to the storage bucket. A player cannot advance until their confession is locked and sealed.
-3. **Round 1 Minigame (Reflex Duel):** All players participate in a synchronized reflex challenge. When the screen flashes from deep red to bright green after a random 2–6 second delay, players must tap instantly. False starts receive an automatic penalty.
-4. **First Winner Crowned:** The player with the fastest reaction time in milliseconds is crowned **Winner 1**.
+3. **Round 1 Minigame — "Balloon Popping Frenzy":** All players participate in an interactive, synchronized 30-second balloon clicker frenzy. Floating balloons rise continuously with randomized speeds, colors, and sizes. Normal balloons award +1 pt, golden balloons award +3 pts, and bomb balloons deduct -2 pts.
+4. **First Winner Crowned & Tie-Breaker:** At $t = 0$, input freezes and final scores are submitted. The player with the highest pop count is crowned **Winner 1**. In case of a tie, the tie is broken by whoever popped their final balloon first.
 5. **The Twist / Immunity & Selection:**
    - **Winner 1 is granted absolute immunity:** Their confession audio is permanently masked and locked away in the vault—it will **NEVER** be played.
    - Winner 1 is prompted to pick a **2nd Winner** from the remaining participants.
@@ -100,7 +100,7 @@ Open [http://localhost:5173](http://localhost:5173) in your browser. You can ope
 │   │   ├── LandingStage.tsx      # Create/join room, rules explanation
 │   │   ├── LobbyStage.tsx        # Connected player roster, bot addition, host start
 │   │   ├── RecordingStage.tsx    # 30s voice confession recorder & prompt shuffle
-│   │   ├── MinigameStage.tsx     # Synchronized reflex duel (Red Light / Green Light)
+│   │   ├── MinigameStage.tsx     # Interactive 30s Balloon Popping Frenzy clicker
 │   │   ├── PickingStage.tsx      # Winner 1 immunity celebration & 2nd Winner selection
 │   │   └── RevealStage.tsx       # Confession queue audio player with reactions
 │   ├── hooks/

@@ -166,6 +166,130 @@ class AudioThemeEngine {
     }
   }
 
+  // Procedural Balloon Pop Synthesizer
+  playBalloonPop(type: 'normal' | 'golden' | 'bomb' = 'normal') {
+    if (this.isMuted) return;
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+
+      if (type === 'bomb') {
+        // Bomb explosion: low frequency boom and crunch
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(160, now);
+        osc.frequency.exponentialRampToValueAtTime(30, now + 0.25);
+
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.3);
+        return;
+      }
+
+      if (type === 'golden') {
+        // Golden balloon pop: crisp pop + sparkling high chime
+        const popOsc = ctx.createOscillator();
+        const popGain = ctx.createGain();
+        popOsc.type = 'sine';
+        popOsc.frequency.setValueAtTime(520, now);
+        popOsc.frequency.exponentialRampToValueAtTime(80, now + 0.08);
+
+        popGain.gain.setValueAtTime(0.3, now);
+        popGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        popOsc.connect(popGain);
+        popGain.connect(ctx.destination);
+        popOsc.start(now);
+        popOsc.stop(now + 0.08);
+
+        // Chimes
+        [880, 1318.5, 1760].forEach((freq, i) => {
+          const chimeOsc = ctx.createOscillator();
+          const chimeGain = ctx.createGain();
+          chimeOsc.type = 'triangle';
+          chimeOsc.frequency.setValueAtTime(freq, now + i * 0.04);
+          chimeGain.gain.setValueAtTime(0.15, now + i * 0.04);
+          chimeGain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.04 + 0.2);
+          chimeOsc.connect(chimeGain);
+          chimeGain.connect(ctx.destination);
+          chimeOsc.start(now + i * 0.04);
+          chimeOsc.stop(now + i * 0.04 + 0.22);
+        });
+        return;
+      }
+
+      // Normal balloon pop: tight rubber snap + quick low punch
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(480, now);
+      osc.frequency.exponentialRampToValueAtTime(60, now + 0.07);
+
+      gain.gain.setValueAtTime(0.4, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.08);
+
+      // Noise pop transient
+      const bufferSize = Math.floor(ctx.sampleRate * 0.025);
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+      }
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 1200;
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.25, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
+
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(ctx.destination);
+      noise.start(now);
+    } catch {
+      // ignore
+    }
+  }
+
+  // Countdown beep for synchronized minigame start
+  playCountdownBeep(isGo: boolean = false) {
+    if (this.isMuted) return;
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = isGo ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(isGo ? 880 : 440, now);
+      if (isGo) {
+        osc.frequency.exponentialRampToValueAtTime(1320, now + 0.15);
+      }
+      gain.gain.setValueAtTime(isGo ? 0.3 : 0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + (isGo ? 0.3 : 0.12));
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + (isGo ? 0.32 : 0.15));
+    } catch {
+      // ignore
+    }
+  }
+
   stopBonfireAmbience() {
     this.ambienceActive = false;
     if (this.crackleInterval) {

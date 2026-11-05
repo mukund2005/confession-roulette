@@ -441,6 +441,80 @@ export const gameService = {
     return winner1.id;
   },
 
+  // Initialize Round 1 Minigame — "Balloon Popping Frenzy" (30s synchronized clicker)
+  async startBalloonMinigame(roomId: string, targetEndTime: number, playerIds: string[]): Promise<void> {
+    // Reset all players' minigame scores & last pop timestamps
+    for (const pid of playerIds) {
+      await this.updatePlayer(pid, {
+        score: 0,
+        reactionTimeMs: null,
+      });
+    }
+
+    await this.updateRoom(roomId, {
+      status: 'MINIGAME',
+      minigameTargetTime: targetEndTime,
+      winner1Id: null,
+      winner2Id: null,
+      activeAudioPlayerId: null,
+    });
+  },
+
+  // Submit final score and last pop timestamp from client at t = 0
+  async submitMinigameScore(playerId: string, score: number, lastPopTimeMs: number): Promise<void> {
+    await this.updatePlayer(playerId, {
+      score,
+      reactionTimeMs: lastPopTimeMs,
+    });
+  },
+
+  // Calculate highest pop count and crown Winner 1 with tie-breaker
+  async crownMinigameWinner(roomId: string, players: Player[]): Promise<string> {
+    const candidates = [...players].sort((a, b) => {
+      const scoreA = a.score || 0;
+      const scoreB = b.score || 0;
+
+      // 1. Highest score wins
+      if (scoreB !== scoreA) {
+        return scoreB - scoreA;
+      }
+
+      // 2. Tie-Breaker: Earlier final pop timestamp wins
+      const timeA = a.reactionTimeMs ?? Number.MAX_SAFE_INTEGER;
+      const timeB = b.reactionTimeMs ?? Number.MAX_SAFE_INTEGER;
+      if (timeA !== timeB) {
+        return timeA - timeB; // smaller timestamp = popped earlier
+      }
+
+      // 3. Fallback deterministic tie-breaker
+      return a.id.localeCompare(b.id);
+    });
+
+    const winner1 = candidates[0];
+    if (winner1) {
+      await this.updatePlayer(winner1.id, { isSafe: true });
+      await this.updateRoom(roomId, {
+        winner1Id: winner1.id,
+      });
+      return winner1.id;
+    }
+
+    return '';
+  },
+
+  // Proceed from Minigame results to Synchronized Confession Listening (REVEAL)
+  async proceedFromMinigameToReveal(roomId: string, winner1Id: string, players: Player[]): Promise<void> {
+    const eligible = players.filter((p) => p.id !== winner1Id && p.audioUrl);
+    const firstRevealId = eligible[0]?.id || null;
+
+    await this.updateRoom(roomId, {
+      status: 'REVEAL',
+      winner1Id,
+      winner2Id: null,
+      activeAudioPlayerId: firstRevealId,
+    });
+  },
+
   // Subscribe to real-time updates and presence heartbeats for a room and all connected players
   subscribeToRoom(
     roomId: string,
