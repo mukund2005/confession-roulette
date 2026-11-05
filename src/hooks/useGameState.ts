@@ -40,6 +40,8 @@ export function useGameState() {
 
   const roomRef = useRef<Room | null>(room);
   const playersRef = useRef<Record<string, Player>>(players);
+  const hostAbsentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activePresenceRef = useRef<string[]>([]);
 
   useEffect(() => {
     roomRef.current = room;
@@ -74,7 +76,37 @@ export function useGameState() {
             });
             const nextHost = sortedByJoined[0];
             if (nextHost && nextHost.id === currentPlayerId) {
+              console.log('[Bonfire] Host missing from roster. Promoting camper to host:', nextHost.name);
               gameService.promoteNextHost(currentRoom.id, nextHost.id).catch(() => {});
+              setRoom((prev) => (prev ? { ...prev, hostId: nextHost.id } : prev));
+            }
+          }
+        }
+      },
+      undefined,
+      (activePresenceKeys) => {
+        activePresenceRef.current = activePresenceKeys;
+        const currentRoom = roomRef.current;
+        if (currentRoom?.status === 'LOBBY' && activePresenceKeys.length > 0) {
+          // If the recorded host is not online in presence (e.g. ghost host who left hours ago)
+          if (!activePresenceKeys.includes(currentRoom.hostId)) {
+            if (!hostAbsentTimerRef.current) {
+              hostAbsentTimerRef.current = setTimeout(() => {
+                const latestRoom = roomRef.current;
+                if (
+                  latestRoom?.status === 'LOBBY' &&
+                  !activePresenceRef.current.includes(latestRoom.hostId)
+                ) {
+                  console.log('[Bonfire] Ghost host absent from presence. Promoting active camper to Host:', currentPlayerId);
+                  gameService.promoteNextHost(latestRoom.id, currentPlayerId).catch(() => {});
+                  setRoom((prev) => (prev ? { ...prev, hostId: currentPlayerId } : prev));
+                }
+              }, 4000);
+            }
+          } else {
+            if (hostAbsentTimerRef.current) {
+              clearTimeout(hostAbsentTimerRef.current);
+              hostAbsentTimerRef.current = null;
             }
           }
         }
@@ -83,6 +115,10 @@ export function useGameState() {
 
     return () => {
       unsubscribe();
+      if (hostAbsentTimerRef.current) {
+        clearTimeout(hostAbsentTimerRef.current);
+        hostAbsentTimerRef.current = null;
+      }
     };
   }, [room?.id, currentPlayerId]);
 
@@ -598,6 +634,21 @@ export function useGameState() {
     setCurrentPlayerId(null);
   }, [room, currentPlayerId]);
 
+  // Any camper can claim host if the recorded host is missing, offline, or away
+  const claimHost = useCallback(async () => {
+    if (!room || !currentPlayerId) return;
+    try {
+      await gameService.promoteNextHost(room.id, currentPlayerId);
+      setRoom((prev) => (prev ? { ...prev, hostId: currentPlayerId } : prev));
+      setPlayers((prev) => ({
+        ...prev,
+        [currentPlayerId]: { ...prev[currentPlayerId], isHost: true },
+      }));
+    } catch (err: any) {
+      console.warn('Error claiming host:', err);
+    }
+  }, [room, currentPlayerId]);
+
   return {
     room,
     players,
@@ -631,6 +682,7 @@ export function useGameState() {
     leaveRoom,
     hostRoom,
     startGameAsHost,
+    claimHost,
     avatarIndex,
     setAvatarIndex,
   };

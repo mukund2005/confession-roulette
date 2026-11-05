@@ -24,6 +24,7 @@ export function App() {
     quickMatch,
     hostRoom,
     startGameAsHost,
+    claimHost,
     avatarIndex,
     setAvatarIndex,
     submitAudio,
@@ -77,6 +78,7 @@ export function App() {
             currentPlayer={currentPlayer}
             isHost={isHost}
             onStartGame={startGameAsHost}
+            onClaimHost={claimHost}
           />
         ) : room.status === 'RECORDING' ? (
           <RecordingStage

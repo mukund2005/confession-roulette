@@ -11,6 +11,7 @@ interface LobbyStageProps {
   currentPlayer: Player | null;
   isHost: boolean;
   onStartGame: () => Promise<void>;
+  onClaimHost: () => Promise<void>;
 }
 
 export const LobbyStage: React.FC<LobbyStageProps> = ({
@@ -19,12 +20,22 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
   currentPlayer,
   isHost,
   onStartGame,
+  onClaimHost,
 }) => {
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [isClaiming, setIsClaiming] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const prevCountRef = useRef(players.length);
+
+  // If player is the only one in the room and not marked host, auto-claim host
+  useEffect(() => {
+    if (players.length === 1 && !isHost && currentPlayer) {
+      console.log('[Bonfire] Sole camper in circle. Auto-claiming host role.');
+      onClaimHost().catch(() => {});
+    }
+  }, [players.length, isHost, currentPlayer, onClaimHost]);
 
   // Play join chime when a new camper sits down
   useEffect(() => {
@@ -326,9 +337,27 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
                 Waiting for host {hostPlayer?.name || 'the host'} to light the fire...
               </span>
             </div>
-            <p className="text-xs text-white/50 font-sans">
+            <p className="text-xs text-white/50 font-sans mb-3">
               Only the campfire host has the flame to ignite the bonfire once everyone is seated.
             </p>
+
+            <button
+              type="button"
+              onClick={async () => {
+                audioTheme.playClickSound();
+                setIsClaiming(true);
+                try {
+                  await onClaimHost();
+                } finally {
+                  setIsClaiming(false);
+                }
+              }}
+              disabled={isClaiming}
+              className="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 font-serif text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 mx-auto active:scale-95 disabled:opacity-50"
+            >
+              <Crown className="h-3.5 w-3.5 text-amber-400 fill-current" />
+              <span>{isClaiming ? 'Claiming Host Role...' : 'Host is Away? Claim Campfire Host'}</span>
+            </button>
           </div>
         )}
       </div>

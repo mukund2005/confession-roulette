@@ -83,11 +83,13 @@ export const gameService = {
   // Browse live public lobbies (Among Us style)
   async browsePublicLobbies(): Promise<PublicLobbyInfo[]> {
     try {
+      const cutoffTime = new Date(Date.now() - 60 * 60 * 1000).toISOString();
       const { data: openRooms, error } = await supabase
         .from('rooms')
         .select('*, players(id, name, avatar_index, is_host)')
         .eq('status', 'LOBBY')
         .eq('is_public', true)
+        .gt('created_at', cutoffTime)
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -118,17 +120,19 @@ export const gameService = {
     }
   },
 
-  // Auto-Matchmaking ("Quick Play / Join Bonfire"): FIFO oldest open room, or creates new
+  // Auto-Matchmaking ("Quick Play / Join Bonfire"): FIFO oldest active room, or creates new
   async findOrCreatePublicBonfire(
     playerName: string,
     avatarIndex: number = 0
   ): Promise<{ room: Room; player: Player; allPlayers: Player[] }> {
-    // 1. Query active rooms FIFO (oldest open room first)
+    // 1. Query active rooms FIFO created within the last 45 minutes (ignores stale/ghost rooms)
+    const cutoffTime = new Date(Date.now() - 45 * 60 * 1000).toISOString();
     const { data: openRooms, error } = await supabase
       .from('rooms')
       .select('*, players(*)')
       .eq('status', 'LOBBY')
       .eq('is_public', true)
+      .gt('created_at', cutoffTime)
       .order('created_at', { ascending: true }) // FIFO filling
       .limit(10);
 
