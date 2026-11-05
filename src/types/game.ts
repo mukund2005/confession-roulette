@@ -1,5 +1,5 @@
 export const MAX_PLAYERS = 6;
-export const MIN_PLAYERS_TO_START = 3;
+export const MIN_PLAYERS_TO_START = 2;
 
 export type GameStatus =
   | 'LOBBY'

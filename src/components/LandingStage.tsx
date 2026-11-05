@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AlertCircle, HelpCircle, Flame, Users, Sparkles, Plus, Compass } from 'lucide-react';
 import { audioTheme } from '../utils/audioTheme';
 import { CAMPER_AVATARS, getCamperAvatar } from '../utils/avatars';
+import { gameService } from '../services/gameService';
 import { HowToPlayModal } from './HowToPlayModal';
 import { LobbyBrowserModal } from './LobbyBrowserModal';
 
@@ -30,8 +31,10 @@ export const LandingStage: React.FC<LandingStageProps> = ({
   const [isLocating, setIsLocating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Auto-detect join query param from URL
+  // Auto-clean inactive rooms & detect join query param from URL
   React.useEffect(() => {
+    gameService.cleanInactiveRooms().catch(() => {});
+
     try {
       const params = new URLSearchParams(window.location.search);
       const joinParam = params.get('join');

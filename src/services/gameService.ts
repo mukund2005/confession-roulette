@@ -80,10 +80,41 @@ export const gameService = {
     };
   },
 
+  // Automatically delete rooms with 0 players or stale/abandoned lobbies (> 30 min old)
+  async cleanInactiveRooms(): Promise<void> {
+    try {
+      const cutoffTime = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+
+      // 1. Delete all rooms with 0 players
+      const { data: emptyRooms } = await supabase
+        .from('rooms')
+        .select('id, players(id)')
+        .eq('status', 'LOBBY');
+
+      if (emptyRooms && emptyRooms.length > 0) {
+        for (const r of emptyRooms) {
+          if (!r.players || r.players.length === 0) {
+            await supabase.from('rooms').delete().eq('id', r.id);
+          }
+        }
+      }
+
+      // 2. Delete stale LOBBY rooms older than 30 minutes
+      await supabase
+        .from('rooms')
+        .delete()
+        .eq('status', 'LOBBY')
+        .lt('created_at', cutoffTime);
+    } catch (e) {
+      console.warn('Background room cleanup non-critical error:', e);
+    }
+  },
+
   // Browse live public lobbies (Among Us style)
   async browsePublicLobbies(): Promise<PublicLobbyInfo[]> {
     try {
-      const cutoffTime = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      this.cleanInactiveRooms().catch(() => {});
+      const cutoffTime = new Date(Date.now() - 30 * 60 * 1000).toISOString();
       const { data: openRooms, error } = await supabase
         .from('rooms')
         .select('*, players(id, name, avatar_index, is_host)')
@@ -125,8 +156,11 @@ export const gameService = {
     playerName: string,
     avatarIndex: number = 0
   ): Promise<{ room: Room; player: Player; allPlayers: Player[] }> {
-    // 1. Query active rooms FIFO created within the last 45 minutes (ignores stale/ghost rooms)
-    const cutoffTime = new Date(Date.now() - 45 * 60 * 1000).toISOString();
+    // 1. Clean up inactive/stale rooms in background
+    this.cleanInactiveRooms().catch(() => {});
+
+    // 2. Query active rooms FIFO created within the last 30 minutes (ignores stale/ghost rooms)
+    const cutoffTime = new Date(Date.now() - 30 * 60 * 1000).toISOString();
     const { data: openRooms, error } = await supabase
       .from('rooms')
       .select('*, players(*)')
@@ -150,7 +184,7 @@ export const gameService = {
       }
     }
 
-    // 2. If no valid open room, automatically create new room as Host
+    // 3. If no valid open room, automatically create new room as Host
     return await this.createRoom(playerName, avatarIndex);
   },
 

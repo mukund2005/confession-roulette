@@ -238,8 +238,8 @@ begin
 
   select count(*) into player_count from public.players where room_id = p_room_id;
 
-  if player_count < 3 then
-    return json_build_object('success', false, 'error', 'Need at least 3 players to start');
+  if player_count < 2 then
+    return json_build_object('success', false, 'error', 'Need at least 2 players to start');
   end if;
 
   -- Lock room from new joins and transition to recording stage

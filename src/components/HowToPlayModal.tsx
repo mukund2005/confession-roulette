@@ -34,13 +34,13 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ isOpen, onClose 
       num: '1',
       badge: 'LOBBY',
       title: 'Gather Around the Bonfire',
-      subtitle: '3 to 6 Campers Required',
+      subtitle: '2 to 6 Campers Required',
       icon: Users,
       color: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
       bullets: [
         'Join via Quick Play, Browse Public Bonfires, or enter a 4-letter room code.',
         'Choose your camper avatar (Fox, Bear, Wolf, Owl, and more).',
-        'Only the Host has the power to light the fire once at least 3 campers are seated.',
+        'Only the Host has the power to light the fire once at least 2 campers are seated.',
       ],
     },
     {
@@ -274,7 +274,7 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ isOpen, onClose 
         {/* Modal Footer */}
         <div className="pt-3.5 border-t border-white/10 shrink-0 flex items-center justify-between font-sans">
           <span className="text-xs text-white/40">
-            3–6 Campers • Free Online Multiplayer
+            2–6 Campers • Free Online Multiplayer
           </span>
 
           <button
