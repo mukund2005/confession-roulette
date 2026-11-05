@@ -37,7 +37,18 @@ export function useGameState() {
     }
   }, [room, currentPlayerId]);
 
-  // Subscribe to real-time updates and presence disconnect detection when room is active
+  const roomRef = useRef<Room | null>(room);
+  const playersRef = useRef<Record<string, Player>>(players);
+
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
+
+  useEffect(() => {
+    playersRef.current = players;
+  }, [players]);
+
+  // Subscribe to real-time updates when room is active
   useEffect(() => {
     if (!room?.id || !currentPlayerId) return;
 
@@ -45,41 +56,19 @@ export function useGameState() {
       room.id,
       currentPlayerId,
       (updatedRoom) => {
-        setRoom((prev) => ({ ...prev, ...updatedRoom }));
+        setRoom((prev) => (prev ? { ...prev, ...updatedRoom } : prev));
       },
       (updatedPlayers) => {
         setPlayers(updatedPlayers);
-      },
-      async (disconnectedPlayerId) => {
-        // Automatically kick out disconnected player when seated in the lobby
-        if (room.status === 'LOBBY') {
-          console.log(`[Bonfire] Disconnected camper detected: ${disconnectedPlayerId}. Kicking out from circle.`);
-          try {
-            await gameService.leaveRoom(room.id, disconnectedPlayerId);
-            // If the disconnected player was the host, promote this player
-            if (room.hostId === disconnectedPlayerId && currentPlayerId !== disconnectedPlayerId) {
-              await gameService.updateRoom(room.id, { hostId: currentPlayerId });
-            }
-          } catch (e) {
-            console.warn('Error kicking out disconnected player:', e);
-          }
-        }
-      },
-      async (activePresenceKeys) => {
-        // Presence sync: check if any seated camper in the lobby is missing from active WebSocket presence
-        if (room.status === 'LOBBY' && activePresenceKeys.length > 0) {
-          const currentPlayers = Object.values(players);
-          for (const p of currentPlayers) {
-            if (p.id !== currentPlayerId && !activePresenceKeys.includes(p.id)) {
-              console.log(`[Bonfire] Absent camper detected in lobby: ${p.name} (${p.id}). Kicking out.`);
-              try {
-                await gameService.leaveRoom(room.id, p.id);
-                if (room.hostId === p.id && currentPlayerId) {
-                  await gameService.updateRoom(room.id, { hostId: currentPlayerId });
-                }
-              } catch (e) {
-                console.warn('Error kicking absent camper:', e);
-              }
+
+        // Host promotion fallback: if current host is no longer in the room, promote first remaining player
+        const currentRoom = roomRef.current;
+        if (currentRoom?.status === 'LOBBY') {
+          const playerIds = Object.keys(updatedPlayers);
+          if (playerIds.length > 0 && !playerIds.includes(currentRoom.hostId)) {
+            const nextHostId = playerIds[0];
+            if (nextHostId === currentPlayerId) {
+              gameService.updateRoom(currentRoom.id, { hostId: nextHostId }).catch(() => {});
             }
           }
         }
@@ -89,24 +78,26 @@ export function useGameState() {
     return () => {
       unsubscribe();
     };
-  }, [room?.id, room?.status, room?.hostId, currentPlayerId, players]);
+  }, [room?.id, currentPlayerId]);
 
   // Handle client's own internet disconnection
   useEffect(() => {
     const handleOffline = () => {
-      setError('Internet connection lost. You were disconnected from the bonfire.');
-      if (room?.id && currentPlayerId) {
-        gameService.sendKeepaliveLeave(currentPlayerId);
-      }
-      localStorage.removeItem(SAVED_SESSION_KEY);
-      setRoom(null);
-      setPlayers({});
-      setCurrentPlayerId(null);
+      setError('Internet connection lost. Reconnecting...');
+    };
+
+    const handleOnline = () => {
+      setError(null);
     };
 
     window.addEventListener('offline', handleOffline);
-    return () => window.removeEventListener('offline', handleOffline);
-  }, [room?.id, currentPlayerId]);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, []);
 
   const playerList = useMemo(() => Object.values(players), [players]);
 
@@ -570,23 +561,21 @@ export function useGameState() {
     setCurrentPlayerId(null);
   }, [room, currentPlayerId]);
 
-  // Clean up player presence and send keepalive deletion on tab close, pagehide, or navigation during lobby
+  // Clean up player presence on browser tab/window close
   useEffect(() => {
     const handleTabClose = () => {
-      if (room?.status === 'LOBBY' && currentPlayerId) {
+      if (roomRef.current?.status === 'LOBBY' && currentPlayerId) {
         localStorage.removeItem(SAVED_SESSION_KEY);
         gameService.sendKeepaliveLeave(currentPlayerId);
       }
     };
 
-    window.addEventListener('pagehide', handleTabClose);
     window.addEventListener('beforeunload', handleTabClose);
 
     return () => {
-      window.removeEventListener('pagehide', handleTabClose);
       window.removeEventListener('beforeunload', handleTabClose);
     };
-  }, [room?.status, currentPlayerId]);
+  }, [currentPlayerId]);
 
   return {
     room,
