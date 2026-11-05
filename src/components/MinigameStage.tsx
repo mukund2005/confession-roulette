@@ -17,6 +17,7 @@ interface MinigameStageProps {
 
 interface Balloon {
   id: number;
+  originX: number;
   x: number;
   y: number;
   radius: number;
@@ -101,6 +102,11 @@ export const MinigameStage: React.FC<MinigameStageProps> = ({
   const nextTextIdRef = useRef(1);
   const lastSpawnTimeRef = useRef(0);
   const animationFrameRef = useRef<number | null>(null);
+  const canvasLogicalSizeRef = useRef<{ width: number; height: number; dpr: number }>({
+    width: 360,
+    height: 480,
+    dpr: 1,
+  });
 
   // Check if winner1 is already crowned
   const winner1 = room.winner1Id ? players.find((p) => p.id === room.winner1Id) || null : null;
@@ -193,41 +199,47 @@ export const MinigameStage: React.FC<MinigameStageProps> = ({
     }
   }, [winner1]);
 
-  // Spawn Balloon helper
-  const spawnBalloon = useCallback((width: number, height: number) => {
+  // Spawn Balloon helper (scaled & bounded for mobile and desktop screens)
+  const spawnBalloon = useCallback((logicalWidth: number, logicalHeight: number) => {
+    const isMobile = logicalWidth < 500;
     const rand = Math.random();
     let type: 'normal' | 'golden' | 'bomb' = 'normal';
     let color = BALLOON_COLORS[Math.floor(Math.random() * BALLOON_COLORS.length)];
-    let radius = Math.floor(Math.random() * 12) + 34; // 34 - 46px
-    let speedY = Math.random() * 70 + 110; // 110 - 180 px/s
+
+    // Adaptive radius for mobile vs desktop: ensures balloons comfortably fit on phone screens
+    let radius = isMobile ? Math.floor(Math.random() * 8) + 26 : Math.floor(Math.random() * 12) + 34;
+    let speedY = isMobile ? Math.random() * 50 + 90 : Math.random() * 70 + 110;
 
     if (rand < 0.12) {
       // 12% Golden Balloon (+3 pts)
       type = 'golden';
       color = '#fbbf24';
-      radius = Math.floor(Math.random() * 6) + 30; // slightly smaller
-      speedY = Math.random() * 80 + 140; // slightly faster
+      radius = isMobile ? Math.floor(Math.random() * 6) + 22 : Math.floor(Math.random() * 6) + 30;
+      speedY = isMobile ? Math.random() * 60 + 110 : Math.random() * 80 + 140;
     } else if (rand < 0.22) {
       // 10% Bomb Balloon (-2 pts)
       type = 'bomb';
       color = '#27272a';
-      radius = Math.floor(Math.random() * 8) + 36;
-      speedY = Math.random() * 60 + 90;
+      radius = isMobile ? Math.floor(Math.random() * 8) + 28 : Math.floor(Math.random() * 8) + 36;
+      speedY = isMobile ? Math.random() * 40 + 80 : Math.random() * 60 + 90;
     }
 
-    const minX = radius + 20;
-    const maxX = Math.max(minX + 20, width - radius - 20);
-    const x = Math.random() * (maxX - minX) + minX;
-    const y = height + radius + 10;
+    const padding = radius + (isMobile ? 12 : 20);
+    const minX = padding;
+    const maxX = Math.max(minX + 10, logicalWidth - padding);
+    const originX = Math.random() * (maxX - minX) + minX;
+    const y = logicalHeight + radius + 15;
+    const wobbleAmount = isMobile ? Math.random() * 10 + 6 : Math.random() * 18 + 10;
 
     const balloon: Balloon = {
       id: nextBalloonIdRef.current++,
-      x,
+      originX,
+      x: originX,
       y,
       radius,
       speedY,
       wobbleSpeed: Math.random() * 0.003 + 0.002,
-      wobbleAmount: Math.random() * 20 + 12,
+      wobbleAmount,
       wobbleOffset: Math.random() * Math.PI * 2,
       type,
       color,
@@ -250,18 +262,21 @@ export const MinigameStage: React.FC<MinigameStageProps> = ({
       const dt = Math.min(0.1, (time - lastTime) / 1000);
       lastTime = time;
 
-      const width = canvas.width;
-      const height = canvas.height;
+      const { width: logicalW, height: logicalH, dpr } = canvasLogicalSizeRef.current;
 
-      ctx.clearRect(0, 0, width, height);
+      ctx.save();
+      // Apply Device Pixel Ratio transform
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, logicalW, logicalH);
 
       // Spawn balloons periodically while game is playing
       if (isPlaying) {
-        if (time - lastSpawnTimeRef.current > 420) {
+        const spawnInterval = logicalW < 500 ? 520 : 420;
+        if (time - lastSpawnTimeRef.current > spawnInterval) {
           lastSpawnTimeRef.current = time;
-          spawnBalloon(width, height);
-          if (Math.random() > 0.6) {
-            spawnBalloon(width, height);
+          spawnBalloon(logicalW, logicalH);
+          if (Math.random() > (logicalW < 500 ? 0.75 : 0.6)) {
+            spawnBalloon(logicalW, logicalH);
           }
         }
       }
@@ -273,7 +288,9 @@ export const MinigameStage: React.FC<MinigameStageProps> = ({
 
         if (isPlaying) {
           b.y -= b.speedY * dt;
-          b.x += Math.sin(time * b.wobbleSpeed + b.wobbleOffset) * b.wobbleAmount * dt;
+          const wobble = Math.sin(time * b.wobbleSpeed + b.wobbleOffset) * b.wobbleAmount;
+          // Clamp b.x strictly within visible screen margins so NO balloon ever floats off the phone screen!
+          b.x = Math.max(b.radius + 6, Math.min(logicalW - b.radius - 6, b.originX + wobble));
         }
 
         // Despawn if floated above screen
@@ -433,7 +450,7 @@ export const MinigameStage: React.FC<MinigameStageProps> = ({
           activeTexts.push(ft);
           ctx.save();
           ctx.globalAlpha = Math.max(0, ft.alpha);
-          ctx.font = 'bold 18px "Cinzel", Georgia, serif';
+          ctx.font = logicalW < 500 ? 'bold 15px sans-serif' : 'bold 18px "Cinzel", Georgia, serif';
           ctx.textAlign = 'center';
           ctx.fillStyle = ft.color;
           ctx.shadowColor = ft.color;
@@ -444,6 +461,7 @@ export const MinigameStage: React.FC<MinigameStageProps> = ({
       }
       floatTextsRef.current = activeTexts;
 
+      ctx.restore();
       animationFrameRef.current = requestAnimationFrame(render);
     };
 
@@ -456,19 +474,19 @@ export const MinigameStage: React.FC<MinigameStageProps> = ({
     };
   }, [isPlaying, spawnBalloon]);
 
-  // Resize canvas according to container
+  // Resize canvas according to container in CSS logical pixels + DPR backing
   useEffect(() => {
     const handleResize = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = Math.floor(rect.width * dpr);
-      canvas.height = Math.floor(rect.height * dpr);
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.scale(dpr, dpr);
-      }
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      const width = Math.max(280, Math.floor(rect.width));
+      const height = Math.max(300, Math.floor(rect.height));
+
+      canvasLogicalSizeRef.current = { width, height, dpr };
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
     };
 
     handleResize();
@@ -476,7 +494,7 @@ export const MinigameStage: React.FC<MinigameStageProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Handle click / tap on canvas
+  // Handle click / tap on canvas with mobile-friendly hit radius
   const handleCanvasInteraction = (clientX: number, clientY: number) => {
     if (!isPlaying) return;
 
@@ -486,6 +504,9 @@ export const MinigameStage: React.FC<MinigameStageProps> = ({
     const clickX = clientX - rect.left;
     const clickY = clientY - rect.top;
 
+    const isMobile = canvasLogicalSizeRef.current.width < 500;
+    const hitPadding = isMobile ? 18 : 12;
+
     // Search balloons in reverse order (topmost first)
     const balloons = balloonsRef.current;
     let hitIndex = -1;
@@ -493,9 +514,9 @@ export const MinigameStage: React.FC<MinigameStageProps> = ({
     for (let i = balloons.length - 1; i >= 0; i--) {
       const b = balloons[i];
       if (b.popped) continue;
-      // Generous hit radius (+12px) for comfortable tapping on touchscreens
+      // Generous hit radius for comfortable tapping on touchscreens
       const dist = Math.hypot(clickX - b.x, clickY - b.y);
-      if (dist <= b.radius + 12) {
+      if (dist <= b.radius + hitPadding) {
         hitIndex = i;
         break;
       }
@@ -617,13 +638,13 @@ export const MinigameStage: React.FC<MinigameStageProps> = ({
       </div>
 
       {/* Main Game Card */}
-      <div className="w-full max-w-2xl bg-[#121214] border border-white/15 rounded-3xl overflow-hidden shadow-2xl relative flex flex-col">
+      <div className="w-full max-w-2xl bg-[#121214] border border-white/15 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl relative flex flex-col">
         {/* Top Control & HUD Bar */}
-        <div className="px-5 py-3.5 bg-black/60 border-b border-white/10 flex items-center justify-between font-sans">
+        <div className="px-3 sm:px-5 py-2.5 sm:py-3.5 bg-black/60 border-b border-white/10 flex items-center justify-between font-sans">
           {/* Synchronized Timer Gauge */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 sm:gap-2.5">
             <div
-              className={`h-9 w-9 rounded-xl flex items-center justify-center border font-mono font-bold text-sm ${
+              className={`h-8 w-8 sm:h-9 sm:w-9 rounded-xl flex items-center justify-center border font-mono font-bold text-xs sm:text-sm ${
                 secondsRemaining !== null && secondsRemaining <= 5
                   ? 'bg-rose-500/20 border-rose-500 text-rose-300 animate-pulse'
                   : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
@@ -632,11 +653,11 @@ export const MinigameStage: React.FC<MinigameStageProps> = ({
               <Timer className="h-4 w-4" />
             </div>
             <div>
-              <span className="text-[10px] text-white/40 uppercase tracking-widest block font-bold">
+              <span className="text-[9px] sm:text-[10px] text-white/40 uppercase tracking-widest block font-bold">
                 Time Remaining
               </span>
               <span
-                className={`text-base font-mono font-black ${
+                className={`text-sm sm:text-base font-mono font-black ${
                   secondsRemaining !== null && secondsRemaining <= 5
                     ? 'text-rose-400 animate-pulse'
                     : 'text-white'
@@ -648,45 +669,45 @@ export const MinigameStage: React.FC<MinigameStageProps> = ({
           </div>
 
           {/* Player Active Score Badge */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <div className="text-right">
-              <span className="text-[10px] text-white/40 uppercase tracking-widest block font-bold">
+              <span className="text-[9px] sm:text-[10px] text-white/40 uppercase tracking-widest block font-bold">
                 Your Score
               </span>
-              <span className="text-xl font-mono font-black text-[#fbbf24]">{score} pts</span>
+              <span className="text-lg sm:text-xl font-mono font-black text-[#fbbf24]">{score} pts</span>
             </div>
             {combo > 2 && (
-              <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 animate-bounce">
+              <span className="text-[9px] sm:text-[10px] font-bold bg-amber-500/20 text-amber-300 px-1.5 sm:px-2 py-0.5 rounded-full border border-amber-500/30 animate-bounce">
                 {combo}x Combo!
               </span>
             )}
           </div>
         </div>
 
-        {/* Canvas Balloon Arena */}
-        <div className="relative w-full h-[400px] sm:h-[460px] bg-gradient-to-b from-slate-950 via-[#09090b] to-black overflow-hidden touch-none cursor-crosshair">
+        {/* Canvas Balloon Arena - Responsive Viewport Height */}
+        <div className="relative w-full h-[54vh] min-h-[350px] max-h-[500px] sm:h-[480px] bg-gradient-to-b from-slate-950 via-[#09090b] to-black overflow-hidden touch-none cursor-crosshair">
           <canvas
             ref={canvasRef}
             onPointerDown={handlePointerDown}
-            className="w-full h-full block"
+            className="w-full h-full block touch-none"
           />
 
           {/* State 1: Host Waiting / Lobby Pre-start */}
           {!targetEndTime && (
-            <div className="absolute inset-0 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-20">
-              <div className="h-16 w-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-4 shadow-lg shadow-amber-500/10 animate-bounce">
-                <Flame className="h-8 w-8" />
+            <div className="absolute inset-0 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center p-4 sm:p-6 text-center z-20">
+              <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-3 sm:mb-4 shadow-lg shadow-amber-500/10 animate-bounce">
+                <Flame className="h-7 w-7 sm:h-8 sm:w-8" />
               </div>
-              <h2 className="text-2xl font-serif text-white mb-2">Ready for the Frenzy?</h2>
-              <p className="text-xs text-white/60 max-w-sm mb-6 font-sans">
-                All 4 campers will start popping simultaneously for 30 seconds. Fast reflexes and accuracy win!
+              <h2 className="text-xl sm:text-2xl font-serif text-white mb-1.5 sm:mb-2">Ready for the Frenzy?</h2>
+              <p className="text-xs text-white/60 max-w-sm mb-5 sm:mb-6 font-sans">
+                All seated campers will start popping simultaneously for 30 seconds. Fast reflexes and accuracy win!
               </p>
 
               {isHost ? (
                 <button
                   onClick={handleHostStart}
                   disabled={isStarting}
-                  className="px-8 py-3.5 bg-[#e2e8f0] hover:bg-white text-black font-serif text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-xl hover:scale-105 active:scale-95 disabled:opacity-40 flex items-center gap-2"
+                  className="px-6 sm:px-8 py-3 sm:py-3.5 bg-[#e2e8f0] hover:bg-white text-black font-serif text-xs font-bold uppercase tracking-widest rounded-xl transition-all shadow-xl hover:scale-105 active:scale-95 disabled:opacity-40 flex items-center gap-2"
                 >
                   <Play className="h-4 w-4 fill-current" />
                   <span>{isStarting ? 'Launching Frenzy...' : 'Launch 30s Balloon Frenzy'}</span>
