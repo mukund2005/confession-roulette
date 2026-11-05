@@ -20,10 +20,12 @@ export function App() {
     allRecorded,
     isLoading,
     error,
-    createRoom,
     joinRoom,
     quickMatch,
-    startRecordingPhase,
+    hostRoom,
+    startGameAsHost,
+    avatarIndex,
+    setAvatarIndex,
     submitAudio,
     startBalloonMinigame,
     submitMinigameScore,
@@ -61,8 +63,10 @@ export function App() {
         {!room ? (
           <LandingStage
             onQuickMatch={quickMatch}
-            onCreateRoom={createRoom}
+            onCreateRoom={hostRoom}
             onJoinRoom={joinRoom}
+            avatarIndex={avatarIndex}
+            setAvatarIndex={setAvatarIndex}
             isLoading={isLoading}
             error={error}
           />
@@ -72,7 +76,7 @@ export function App() {
             players={playerList}
             currentPlayer={currentPlayer}
             isHost={isHost}
-            onStartGame={startRecordingPhase}
+            onStartGame={startGameAsHost}
           />
         ) : room.status === 'RECORDING' ? (
           <RecordingStage

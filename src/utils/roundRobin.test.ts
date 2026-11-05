@@ -3,8 +3,45 @@ import assert from 'node:assert/strict';
 import { generateRoundRobinSchedule } from './roundRobin.ts';
 import { MAX_PLAYERS } from '../types/game.ts';
 
-test('MAX_PLAYERS is configured to 4', () => {
-  assert.strictEqual(MAX_PLAYERS, 4);
+test('MAX_PLAYERS is configured to 6 (Strict Bonfire Room Limit)', () => {
+  assert.strictEqual(MAX_PLAYERS, 6);
+});
+
+test('generateRoundRobinSchedule with 6 players (maximum bonfire capacity)', () => {
+  const players = ['camper-1', 'camper-2', 'camper-3', 'camper-4', 'camper-5', 'camper-6'];
+  const schedule = generateRoundRobinSchedule(players);
+
+  // 6 players must produce N-1 = 5 rounds
+  assert.strictEqual(schedule.length, 5, 'Should generate exactly 5 rounds for 6 players');
+
+  const seenPairings = new Set<string>();
+
+  schedule.forEach((round, roundIndex) => {
+    // Each round must have 3 pairs (6 players / 2)
+    assert.strictEqual(round.length, 3, `Round ${roundIndex + 1} should have 3 pairs`);
+
+    const playersInRound = new Set<string>();
+
+    round.forEach((pair) => {
+      assert.notStrictEqual(pair.player1Id, pair.player2Id, 'Player cannot be paired with self');
+      assert.ok(players.includes(pair.player1Id), 'player1Id must be in input players');
+      assert.ok(players.includes(pair.player2Id), 'player2Id must be in input players');
+
+      assert.ok(!playersInRound.has(pair.player1Id), `Player ${pair.player1Id} appears multiple times in round ${roundIndex + 1}`);
+      assert.ok(!playersInRound.has(pair.player2Id), `Player ${pair.player2Id} appears multiple times in round ${roundIndex + 1}`);
+      playersInRound.add(pair.player1Id);
+      playersInRound.add(pair.player2Id);
+
+      const pairKey = [pair.player1Id, pair.player2Id].sort().join(':');
+      assert.ok(!seenPairings.has(pairKey), `Pair ${pairKey} was scheduled more than once`);
+      seenPairings.add(pairKey);
+    });
+
+    assert.strictEqual(playersInRound.size, 6, `All 6 players must participate in round ${roundIndex + 1}`);
+  });
+
+  // 6 choose 2 = 15 total unique pairings
+  assert.strictEqual(seenPairings.size, 15, 'All 15 possible pairings must be scheduled exactly once across the 5 rounds');
 });
 
 test('generateRoundRobinSchedule with 4 players (maximum game capacity)', () => {

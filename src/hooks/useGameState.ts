@@ -9,6 +9,7 @@ export function useGameState() {
   const [room, setRoom] = useState<Room | null>(null);
   const [players, setPlayers] = useState<Record<string, Player>>({});
   const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
+  const [avatarIndex, setAvatarIndex] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,14 +62,19 @@ export function useGameState() {
       (updatedPlayers) => {
         setPlayers(updatedPlayers);
 
-        // Host promotion fallback: if current host is no longer in the room, promote first remaining player
+        // Host migration fail-safe: if current host is no longer in the room, promote oldest remaining camper
         const currentRoom = roomRef.current;
         if (currentRoom?.status === 'LOBBY') {
           const playerIds = Object.keys(updatedPlayers);
           if (playerIds.length > 0 && !playerIds.includes(currentRoom.hostId)) {
-            const nextHostId = playerIds[0];
-            if (nextHostId === currentPlayerId) {
-              gameService.updateRoom(currentRoom.id, { hostId: nextHostId }).catch(() => {});
+            const sortedByJoined = Object.values(updatedPlayers).sort((a, b) => {
+              const tA = new Date(a.joinedAt || a.createdAt || 0).getTime();
+              const tB = new Date(b.joinedAt || b.createdAt || 0).getTime();
+              return tA - tB;
+            });
+            const nextHost = sortedByJoined[0];
+            if (nextHost && nextHost.id === currentPlayerId) {
+              gameService.promoteNextHost(currentRoom.id, nextHost.id).catch(() => {});
             }
           }
         }
@@ -126,12 +132,13 @@ export function useGameState() {
     return playerList.every((p) => p.hasRecorded);
   }, [playerList]);
 
-  // Quick Match action for real 4-player matchmaking
-  const quickMatch = useCallback(async (playerName: string) => {
+  // Quick Play / Auto-Matchmaking (FIFO oldest open room under 6 capacity)
+  const quickMatch = useCallback(async (playerName: string, avatar?: number) => {
     setIsLoading(true);
     setError(null);
     try {
-      const { room: matchedRoom, player: newPlayer, allPlayers } = await gameService.findOrCreatePublicBonfire(playerName);
+      const selectedAvatar = avatar !== undefined ? avatar : avatarIndex;
+      const { room: matchedRoom, player: newPlayer, allPlayers } = await gameService.findOrCreatePublicBonfire(playerName, selectedAvatar);
       setRoom(matchedRoom);
       const playerMap: Record<string, Player> = {};
       allPlayers.forEach((p) => {
@@ -145,14 +152,15 @@ export function useGameState() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [avatarIndex]);
 
-  // Create Room action
-  const createRoom = useCallback(async (hostName: string) => {
+  // Host a Room (The "Bonfire")
+  const hostRoom = useCallback(async (hostName: string, avatar?: number) => {
     setIsLoading(true);
     setError(null);
     try {
-      const { room: newRoom, player: newPlayer, allPlayers } = await gameService.createRoom(hostName);
+      const selectedAvatar = avatar !== undefined ? avatar : avatarIndex;
+      const { room: newRoom, player: newPlayer, allPlayers } = await gameService.hostRoom(hostName, selectedAvatar);
       setRoom(newRoom);
       const playerMap: Record<string, Player> = {};
       allPlayers.forEach((p) => {
@@ -161,19 +169,25 @@ export function useGameState() {
       setPlayers(playerMap);
       setCurrentPlayerId(newPlayer.id);
     } catch (err: any) {
-      setError(err.message || 'Failed to create room');
+      setError(err.message || 'Failed to host bonfire');
       throw err;
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [avatarIndex]);
+
+  // Create Room action (alias for hostRoom)
+  const createRoom = useCallback(async (hostName: string, avatar?: number) => {
+    return hostRoom(hostName, avatar);
+  }, [hostRoom]);
 
   // Join Room action
-  const joinRoom = useCallback(async (roomCode: string, playerName: string) => {
+  const joinRoom = useCallback(async (roomCode: string, playerName: string, avatar?: number) => {
     setIsLoading(true);
     setError(null);
     try {
-      const { room: joinedRoom, player: newPlayer, allPlayers } = await gameService.joinRoom(roomCode, playerName);
+      const selectedAvatar = avatar !== undefined ? avatar : avatarIndex;
+      const { room: joinedRoom, player: newPlayer, allPlayers } = await gameService.joinRoom(roomCode, playerName, selectedAvatar);
       setRoom(joinedRoom);
       const playerMap: Record<string, Player> = {};
       allPlayers.forEach((p) => {
@@ -187,17 +201,28 @@ export function useGameState() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [avatarIndex]);
 
-  // Start the confession recording stage
-  const startRecordingPhase = useCallback(async () => {
-    if (!room) return;
+  // Host-Exclusive Start Game Authority with atomic state lock
+  const startGameAsHost = useCallback(async () => {
+    if (!room || !currentPlayerId) return;
+    setIsLoading(true);
+    setError(null);
     try {
-      await gameService.updateRoom(room.id, { status: 'RECORDING' });
+      await gameService.startGameAsHost(room.id, currentPlayerId);
+      setRoom((prev) => (prev ? { ...prev, status: 'RECORDING', isPublic: false } : prev));
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Failed to light bonfire');
+      throw err;
+    } finally {
+      setIsLoading(false);
     }
-  }, [room]);
+  }, [room, currentPlayerId]);
+
+  // Start the confession recording stage (calls startGameAsHost)
+  const startRecordingPhase = useCallback(async () => {
+    return startGameAsHost();
+  }, [startGameAsHost]);
 
   // Upload player confession
   const submitAudio = useCallback(
@@ -604,5 +629,9 @@ export function useGameState() {
     nextConfession,
     playAgain,
     leaveRoom,
+    hostRoom,
+    startGameAsHost,
+    avatarIndex,
+    setAvatarIndex,
   };
 }

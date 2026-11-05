@@ -25,8 +25,10 @@ create table if not exists public.rooms (
   created_at timestamptz default now()
 );
 
--- Ensure is_public and Speed Talk columns exist on existing deployments
+-- Ensure is_public, capacity, and Speed Talk columns exist on existing deployments
 alter table public.rooms add column if not exists is_public boolean default true;
+alter table public.rooms add column if not exists current_players integer not null default 1;
+alter table public.rooms add column if not exists max_players integer not null default 6;
 alter table public.rooms add column if not exists current_breakout_round integer default 0;
 alter table public.rooms add column if not exists current_breakout_end_time bigint;
 alter table public.rooms add column if not exists breakout_schedule jsonb;
@@ -42,6 +44,8 @@ create table if not exists public.players (
   id text primary key,
   room_id uuid not null references public.rooms(id) on delete cascade,
   name text not null,
+  avatar_index integer default 0,
+  is_host boolean default false,
   audio_url text,
   has_recorded boolean default false,
   score integer default 0,
@@ -49,8 +53,13 @@ create table if not exists public.players (
   recognition_score integer default 0,
   correct_guesses_count integer default 0,
   is_safe boolean default false,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  joined_at timestamptz default now()
 );
+
+alter table public.players add column if not exists avatar_index integer default 0;
+alter table public.players add column if not exists is_host boolean default false;
+alter table public.players add column if not exists joined_at timestamptz default now();
 
 -- 4. Create Guesses Table
 create table if not exists public.guesses (
@@ -142,3 +151,102 @@ drop policy if exists "Public Update of Confession Audios" on storage.objects;
 create policy "Public Access to Confession Audios" on storage.objects for select using (bucket_id = 'confessions');
 create policy "Public Upload of Confession Audios" on storage.objects for insert with check (bucket_id = 'confessions');
 create policy "Public Update of Confession Audios" on storage.objects for update using (bucket_id = 'confessions');
+
+-- ==============================================================================
+-- 11. Atomic Matchmaking & Host Authority Functions
+-- ==============================================================================
+
+-- 1. Atomic Matchmaking Function: Guarantees max 6 players with zero race conditions
+create or replace function public.join_or_create_match(
+  p_player_id text,
+  p_player_name text,
+  p_avatar int default 0
+)
+returns json
+language plpgsql
+security definer
+as $$
+declare
+  target_room_id uuid;
+  target_room_code text;
+  v_is_host boolean := false;
+  v_chars text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  v_code text := '';
+  i int;
+begin
+  -- Find the oldest open room with slots under 6
+  select id, room_code into target_room_id, target_room_code
+  from public.rooms
+  where status = 'LOBBY' and is_public = true and current_players < 6
+  order by created_at asc
+  limit 1
+  for update skip locked;
+
+  -- Create a new room if none available
+  if target_room_id is null then
+    for i in 1..4 loop
+      v_code := v_code || substr(v_chars, floor(random() * length(v_chars) + 1)::int, 1);
+    end loop;
+
+    insert into public.rooms (room_code, host_id, current_players, max_players, is_public, status)
+    values (v_code, p_player_id, 1, 6, true, 'LOBBY')
+    returning id, room_code into target_room_id, target_room_code;
+
+    v_is_host := true;
+  else
+    -- Increment player count (capped at 6)
+    update public.rooms
+    set current_players = current_players + 1
+    where id = target_room_id;
+  end if;
+
+  -- Insert player entry
+  insert into public.players (id, room_id, name, avatar_index, is_host)
+  values (p_player_id, target_room_id, p_player_name, p_avatar, v_is_host);
+
+  return json_build_object(
+    'roomId', target_room_id,
+    'roomCode', target_room_code,
+    'isHost', v_is_host
+  );
+end;
+$$;
+
+-- 2. Secure Host Start Function
+create or replace function public.start_game_as_host(
+  p_room_id uuid,
+  p_caller_id text
+)
+returns json
+language plpgsql
+security definer
+as $$
+declare
+  r_record record;
+  player_count int;
+begin
+  select * into r_record from public.rooms where id = p_room_id;
+
+  if r_record is null then
+    return json_build_object('success', false, 'error', 'Room not found');
+  end if;
+
+  -- Strict host authorization check
+  if r_record.host_id <> p_caller_id then
+    return json_build_object('success', false, 'error', 'Unauthorized: Only the host can start');
+  end if;
+
+  select count(*) into player_count from public.players where room_id = p_room_id;
+
+  if player_count < 3 then
+    return json_build_object('success', false, 'error', 'Need at least 3 players to start');
+  end if;
+
+  -- Lock room from new joins and transition to recording stage
+  update public.rooms
+  set status = 'RECORDING', is_public = false
+  where id = p_room_id;
+
+  return json_build_object('success', true, 'status', 'RECORDING');
+end;
+$$;

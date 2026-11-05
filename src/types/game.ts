@@ -1,4 +1,5 @@
-export const MAX_PLAYERS = 4;
+export const MAX_PLAYERS = 6;
+export const MIN_PLAYERS_TO_START = 3;
 
 export type GameStatus =
   | 'LOBBY'
@@ -13,6 +14,8 @@ export interface Player {
   id: string;
   roomId: string;
   name: string;
+  avatarIndex?: number;
+  isHost?: boolean;
   audioUrl: string | null;
   hasRecorded: boolean;
   score: number;
@@ -21,6 +24,7 @@ export interface Player {
   correctGuessesCount: number;
   isSafe: boolean;
   createdAt?: string;
+  joinedAt?: string;
 }
 
 export interface BreakoutPair {
@@ -50,6 +54,8 @@ export interface Room {
   roomCode: string;
   status: GameStatus;
   hostId: string;
+  currentPlayers?: number;
+  maxPlayers?: number;
   winner1Id: string | null;
   winner2Id: string | null;
   activeAudioPlayerId: string | null;
@@ -62,6 +68,17 @@ export interface Room {
   isPublic?: boolean;
   isSolo?: boolean;
   createdAt?: string;
+}
+
+export interface PublicLobbyInfo {
+  id: string;
+  roomCode: string;
+  hostName: string;
+  hostAvatar: number;
+  playerCount: number;
+  maxPlayers: number;
+  status: GameStatus;
+  createdAt: string;
 }
 
 export interface GameState {

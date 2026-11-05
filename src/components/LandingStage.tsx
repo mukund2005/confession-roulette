@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
-import { AlertCircle, HelpCircle } from 'lucide-react';
+import { AlertCircle, HelpCircle, Flame, Users, Sparkles, Plus, Compass } from 'lucide-react';
 import { audioTheme } from '../utils/audioTheme';
+import { CAMPER_AVATARS, getCamperAvatar } from '../utils/avatars';
 import { HowToPlayModal } from './HowToPlayModal';
+import { LobbyBrowserModal } from './LobbyBrowserModal';
 
 interface LandingStageProps {
-  onQuickMatch: (playerName: string) => Promise<void>;
-  onCreateRoom: (hostName: string) => Promise<void>;
-  onJoinRoom: (roomCode: string, playerName: string) => Promise<void>;
+  onQuickMatch: (playerName: string, avatarIndex?: number) => Promise<void>;
+  onCreateRoom: (hostName: string, avatarIndex?: number) => Promise<void>;
+  onJoinRoom: (roomCode: string, playerName: string, avatarIndex?: number) => Promise<void>;
+  avatarIndex: number;
+  setAvatarIndex: (index: number) => void;
   isLoading: boolean;
   error: string | null;
 }
@@ -15,12 +19,14 @@ export const LandingStage: React.FC<LandingStageProps> = ({
   onQuickMatch,
   onCreateRoom,
   onJoinRoom,
+  avatarIndex,
+  setAvatarIndex,
   isLoading,
   error,
 }) => {
   const [name, setName] = useState('');
   const [roomCode, setRoomCode] = useState('');
-  const [activeModal, setActiveModal] = useState<'none' | 'host' | 'join' | 'howToPlay'>('none');
+  const [activeModal, setActiveModal] = useState<'none' | 'host' | 'join' | 'browse' | 'howToPlay'>('none');
   const [isLocating, setIsLocating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -38,14 +44,20 @@ export const LandingStage: React.FC<LandingStageProps> = ({
     }
   }, []);
 
-  const handlePlayClick = async () => {
+  const selectedAvatar = getCamperAvatar(avatarIndex);
+
+  const getEffectiveName = () => {
+    return name.trim() || `${selectedAvatar.name}_${Math.floor(Math.random() * 899 + 100)}`;
+  };
+
+  const handleQuickPlay = async () => {
     audioTheme.playClickSound();
     audioTheme.startBonfireAmbience();
     setFormError(null);
-    const trimmed = name.trim() || `Camper_${Math.floor(Math.random() * 899 + 100)}`;
+    const effectiveName = getEffectiveName();
     setIsLocating(true);
     try {
-      await onQuickMatch(trimmed);
+      await onQuickMatch(effectiveName, avatarIndex);
     } catch (err: any) {
       setIsLocating(false);
       setFormError(err.message || 'Could not locate bonfire. Try hosting one!');
@@ -57,13 +69,10 @@ export const LandingStage: React.FC<LandingStageProps> = ({
     audioTheme.playClickSound();
     audioTheme.startBonfireAmbience();
     setFormError(null);
-    const trimmed = name.trim();
-    if (!trimmed) {
-      setFormError('Please enter your name.');
-      return;
-    }
+    const effectiveName = name.trim() || `${selectedAvatar.name}_Host`;
     try {
-      await onCreateRoom(trimmed);
+      await onCreateRoom(effectiveName, avatarIndex);
+      setActiveModal('none');
     } catch (err: any) {
       setFormError(err.message || 'Failed to host bonfire.');
     }
@@ -74,21 +83,23 @@ export const LandingStage: React.FC<LandingStageProps> = ({
     audioTheme.playClickSound();
     audioTheme.startBonfireAmbience();
     setFormError(null);
-    const trimmedName = name.trim();
+    const effectiveName = name.trim() || `${selectedAvatar.name}_Camper`;
     const trimmedCode = roomCode.trim().toUpperCase();
-    if (!trimmedName) {
-      setFormError('Please enter your name.');
-      return;
-    }
     if (!trimmedCode) {
-      setFormError('Please enter the bonfire code.');
+      setFormError('Please enter the 4-letter bonfire code.');
       return;
     }
     try {
-      await onJoinRoom(trimmedCode, trimmedName);
+      await onJoinRoom(trimmedCode, effectiveName, avatarIndex);
+      setActiveModal('none');
     } catch (err: any) {
       setFormError(err.message || 'Failed to join bonfire.');
     }
+  };
+
+  const handleBrowserJoin = async (targetCode: string) => {
+    const effectiveName = getEffectiveName();
+    await onJoinRoom(targetCode, effectiveName, avatarIndex);
   };
 
   return (
@@ -114,39 +125,70 @@ export const LandingStage: React.FC<LandingStageProps> = ({
       {/* Main Content Area */}
       <div className="relative z-10 flex flex-col items-center text-center max-w-xl w-full">
         {/* Title: Rupiko */}
-        <h1 className="text-5xl sm:text-7xl font-serif tracking-normal text-white mb-6">
+        <h1 className="text-5xl sm:text-7xl font-serif tracking-normal text-white mb-4 drop-shadow-[0_4px_20px_rgba(255,255,255,0.2)]">
           Rupiko
         </h1>
 
         {/* Campfire Illustration */}
-        <div className="mb-6 relative group">
+        <div className="mb-4 relative group">
+          <div className="absolute -inset-4 rounded-full bg-amber-500/20 blur-2xl pointer-events-none animate-pulse" />
           <img
             src="/campfire.png"
             alt="Campfire Bonfire"
-            className="w-44 h-44 sm:w-52 sm:h-52 object-contain drop-shadow-[0_10px_35px_rgba(249,115,22,0.45)] transition-transform duration-300 group-hover:scale-105"
+            className="w-36 h-36 sm:w-44 sm:h-44 object-contain drop-shadow-[0_10px_35px_rgba(249,115,22,0.55)] transition-transform duration-300 group-hover:scale-105"
           />
         </div>
 
         {/* Tagline */}
-        <p className="text-sm sm:text-base text-white/90 font-serif tracking-wide mb-8 max-w-md">
-          Amazing space on the internet for amazing confessions.
+        <p className="text-xs sm:text-sm text-white/90 font-serif tracking-wide mb-5 max-w-md">
+          A cozy, anonymous bonfire for secrets, voice confessions, and high stakes.
         </p>
 
+        {/* Camper Avatar Selector */}
+        <div className="w-full max-w-sm mb-4">
+          <span className="text-[11px] font-sans uppercase tracking-widest text-amber-400 font-bold block mb-2">
+            Choose Your Camper
+          </span>
+          <div className="flex items-center justify-center gap-2 p-2 rounded-2xl bg-[#121214] border border-white/15 shadow-inner">
+            {CAMPER_AVATARS.map((av) => {
+              const isSelected = av.id === avatarIndex;
+              return (
+                <button
+                  key={av.id}
+                  type="button"
+                  onClick={() => {
+                    audioTheme.playClickSound();
+                    setAvatarIndex(av.id);
+                  }}
+                  className={`h-9 w-9 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center text-lg sm:text-xl transition-all ${
+                    isSelected
+                      ? `${av.bgColor} border-2 border-amber-400 scale-110 shadow-[0_0_12px_rgba(251,191,36,0.5)]`
+                      : 'bg-black/50 border border-white/10 hover:border-white/30 hover:scale-105'
+                  }`}
+                  title={av.name}
+                >
+                  {av.emoji}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Display Name Input */}
-        <div className="w-full max-w-xs mb-6">
+        <div className="w-full max-w-xs mb-5">
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Enter your name (e.g. Alex)"
-            maxLength={20}
-            className="w-full px-4 py-2.5 bg-black/60 border border-white/20 rounded-lg text-white placeholder-white/40 text-center font-serif text-sm focus:outline-none focus:border-white transition-colors"
+            placeholder={`Name (default: ${selectedAvatar.name})`}
+            maxLength={18}
+            className="w-full px-4 py-2.5 bg-black/70 border border-white/20 rounded-xl text-white placeholder-white/40 text-center font-serif text-sm focus:outline-none focus:border-amber-400/80 transition-all shadow-inner"
           />
         </div>
 
         {(formError || error) && (
-          <div className="mb-6 p-3 rounded bg-red-950/60 border border-red-500/40 text-red-200 text-xs flex items-center gap-2 max-w-sm">
-            <AlertCircle className="h-4 w-4 shrink-0" />
+          <div className="mb-5 p-3 rounded-xl bg-red-950/70 border border-red-500/40 text-red-200 text-xs flex items-center gap-2 max-w-sm font-sans animate-shake">
+            <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
             <span>{formError || error}</span>
           </div>
         )}
@@ -154,37 +196,63 @@ export const LandingStage: React.FC<LandingStageProps> = ({
         {/* State: Locating Bonfire (Matchmaking Screen) */}
         {isLocating || isLoading ? (
           <div className="flex flex-col items-center py-6 animate-pulse">
-            <h2 className="text-2xl sm:text-3xl font-serif uppercase tracking-widest text-white mb-3">
-              LOCATING THE BONFIRE...
+            <div className="h-10 w-10 border-3 border-amber-400 border-t-transparent rounded-full animate-spin mb-3" />
+            <h2 className="text-xl sm:text-2xl font-serif uppercase tracking-widest text-white mb-2">
+              CONNECTING TO BONFIRE...
             </h2>
-            <p className="text-xs text-white/60 tracking-wider">
-              Gathering 4 campers from the internet to sit around the fire
+            <p className="text-xs text-white/60 tracking-wider font-sans">
+              Locating an open circle of campers from the internet (max 6)
             </p>
           </div>
         ) : (
-          /* Buttons: PLAY / HOST BONFIRE / JOIN BONFIRE */
-          <div className="w-full max-w-md flex flex-col items-center gap-6">
-            {/* Main PLAY Button */}
+          /* Matchmaking & Lobby Controls */
+          <div className="w-full max-w-md flex flex-col items-center gap-3.5">
+            {/* Primary Action: Quick Play (FIFO Auto-Matchmaking) */}
             <button
-              onClick={handlePlayClick}
-              className="w-36 py-3 bg-[#e2e8f0] hover:bg-white text-black font-serif text-sm tracking-widest uppercase rounded shadow-[0_4px_20px_rgba(255,255,255,0.2)] hover:scale-105 active:scale-95 transition-all"
+              type="button"
+              onClick={handleQuickPlay}
+              className="w-full max-w-xs py-3.5 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-white hover:to-amber-300 text-black font-serif text-sm font-bold tracking-widest uppercase rounded-2xl shadow-[0_4px_25px_rgba(251,191,36,0.3)] hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2"
             >
-              PLAY
+              <Flame className="h-4 w-4 fill-current" />
+              <span>Quick Play (Join Bonfire)</span>
             </button>
 
-            {/* Sub-buttons: HOST BONFIRE / JOIN BONFIRE */}
-            <div className="flex items-center gap-4 sm:gap-8 w-full justify-center">
+            {/* Sub-Actions: Host Room / Browse Lobbies / Join with Code */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full max-w-sm font-sans">
               <button
-                onClick={() => setActiveModal('host')}
-                className="px-6 py-2.5 bg-[#d1d5db] hover:bg-[#e2e8f0] text-black font-serif text-xs tracking-wider uppercase rounded shadow-sm hover:scale-105 active:scale-95 transition-all"
+                type="button"
+                onClick={() => {
+                  audioTheme.playClickSound();
+                  setActiveModal('host');
+                }}
+                className="py-2.5 px-3 bg-white/10 hover:bg-white/20 border border-white/15 text-white font-serif text-xs font-semibold tracking-wider uppercase rounded-xl transition-all shadow-sm hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5"
               >
-                HOST BONFIRE
+                <Plus className="h-3.5 w-3.5 text-amber-400" />
+                <span>Host Room</span>
               </button>
+
               <button
-                onClick={() => setActiveModal('join')}
-                className="px-6 py-2.5 bg-[#d1d5db] hover:bg-[#e2e8f0] text-black font-serif text-xs tracking-wider uppercase rounded shadow-sm hover:scale-105 active:scale-95 transition-all"
+                type="button"
+                onClick={() => {
+                  audioTheme.playClickSound();
+                  setActiveModal('browse');
+                }}
+                className="py-2.5 px-3 bg-white/10 hover:bg-white/20 border border-white/15 text-white font-serif text-xs font-semibold tracking-wider uppercase rounded-xl transition-all shadow-sm hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5"
               >
-                JOIN BONFIRE
+                <Compass className="h-3.5 w-3.5 text-amber-400" />
+                <span>Browse</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  audioTheme.playClickSound();
+                  setActiveModal('join');
+                }}
+                className="col-span-2 sm:col-span-1 py-2.5 px-3 bg-white/10 hover:bg-white/20 border border-white/15 text-white font-serif text-xs font-semibold tracking-wider uppercase rounded-xl transition-all shadow-sm hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5"
+              >
+                <Users className="h-3.5 w-3.5 text-amber-400" />
+                <span>Enter Code</span>
               </button>
             </div>
 
@@ -195,7 +263,7 @@ export const LandingStage: React.FC<LandingStageProps> = ({
                 audioTheme.playClickSound();
                 setActiveModal('howToPlay');
               }}
-              className="text-xs text-amber-300/80 hover:text-amber-200 font-serif tracking-wider uppercase flex items-center gap-1.5 transition-all px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 hover:border-amber-500/40 active:scale-95 shadow-sm"
+              className="mt-2 text-xs text-amber-300/80 hover:text-amber-200 font-serif tracking-wider uppercase flex items-center gap-1.5 transition-all px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 hover:border-amber-500/40 active:scale-95 shadow-sm"
             >
               <HelpCircle className="h-3.5 w-3.5 text-amber-400" />
               <span>How To Play & Game Rules</span>
@@ -204,34 +272,37 @@ export const LandingStage: React.FC<LandingStageProps> = ({
         )}
       </div>
 
-      {/* Host Modal */}
+      {/* Host Room Modal */}
       {activeModal === 'host' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-[#121214] border border-white/20 rounded-2xl p-6 sm:p-8 max-w-sm w-full text-center">
-            <h3 className="text-xl font-serif text-white mb-2">Host A Private Bonfire</h3>
-            <p className="text-xs text-white/60 mb-6">
-              Create a campfire room to invite your friends with a code.
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
+          <div className="bg-[#121214] border border-white/20 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl">
+            <div className="h-12 w-12 mx-auto rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-3">
+              <Sparkles className="h-6 w-6 fill-current" />
+            </div>
+            <h3 className="text-xl font-serif text-white font-bold mb-1">Host A New Bonfire</h3>
+            <p className="text-xs text-white/60 mb-5 font-sans">
+              Creates a public 6-player room where you have exclusive authority to light the fire.
             </p>
-            <form onSubmit={handleHostSubmit} className="space-y-4">
+            <form onSubmit={handleHostSubmit} className="space-y-4 font-sans">
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Your Display Name"
-                className="w-full px-4 py-2.5 bg-black border border-white/30 rounded text-white text-center font-serif text-sm focus:outline-none focus:border-white"
-                required
+                placeholder={`Host Name (e.g. ${selectedAvatar.name})`}
+                maxLength={18}
+                className="w-full px-4 py-2.5 bg-black border border-white/30 rounded-xl text-white text-center font-serif text-sm focus:outline-none focus:border-amber-400"
               />
               <div className="flex gap-2">
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-[#e2e8f0] hover:bg-white text-black font-serif text-xs uppercase tracking-wider rounded font-bold"
+                  className="flex-1 py-2.5 bg-[#fbbf24] hover:bg-white text-black font-serif text-xs uppercase tracking-wider rounded-xl font-bold shadow-md transition-all active:scale-95"
                 >
-                  Create Bonfire
+                  Create & Host
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveModal('none')}
-                  className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white font-serif text-xs uppercase rounded"
+                  className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white font-serif text-xs uppercase rounded-xl transition-all"
                 >
                   Cancel
                 </button>
@@ -241,22 +312,25 @@ export const LandingStage: React.FC<LandingStageProps> = ({
         </div>
       )}
 
-      {/* Join Modal */}
+      {/* Join with Code Modal */}
       {activeModal === 'join' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-[#121214] border border-white/20 rounded-2xl p-6 sm:p-8 max-w-sm w-full text-center">
-            <h3 className="text-xl font-serif text-white mb-2">Join A Bonfire</h3>
-            <p className="text-xs text-white/60 mb-6">
-              Enter the 4-letter campfire code to take a seat around the fire.
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
+          <div className="bg-[#121214] border border-white/20 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl">
+            <div className="h-12 w-12 mx-auto rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-3">
+              <Users className="h-6 w-6" />
+            </div>
+            <h3 className="text-xl font-serif text-white font-bold mb-1">Join with Room Code</h3>
+            <p className="text-xs text-white/60 mb-5 font-sans">
+              Enter the 4-letter campfire code to take a seat in your friend's circle.
             </p>
-            <form onSubmit={handleJoinSubmit} className="space-y-4">
+            <form onSubmit={handleJoinSubmit} className="space-y-3 font-sans">
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Your Display Name"
-                className="w-full px-4 py-2.5 bg-black border border-white/30 rounded text-white text-center font-serif text-sm focus:outline-none focus:border-white"
-                required
+                placeholder={`Camper Name (e.g. ${selectedAvatar.name})`}
+                maxLength={18}
+                className="w-full px-4 py-2.5 bg-black border border-white/30 rounded-xl text-white text-center font-serif text-sm focus:outline-none focus:border-amber-400"
               />
               <input
                 type="text"
@@ -264,20 +338,20 @@ export const LandingStage: React.FC<LandingStageProps> = ({
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
                 placeholder="4-LETTER CODE"
                 maxLength={6}
-                className="w-full px-4 py-2.5 bg-black border border-white/30 rounded text-white text-center font-mono font-bold tracking-widest text-base focus:outline-none focus:border-white"
+                className="w-full px-4 py-2.5 bg-black border border-white/30 rounded-xl text-white text-center font-mono font-black tracking-widest text-lg focus:outline-none focus:border-amber-400 text-amber-300"
                 required
               />
-              <div className="flex gap-2">
+              <div className="flex gap-2 pt-1">
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-[#e2e8f0] hover:bg-white text-black font-serif text-xs uppercase tracking-wider rounded font-bold"
+                  className="flex-1 py-2.5 bg-[#e2e8f0] hover:bg-white text-black font-serif text-xs uppercase tracking-wider rounded-xl font-bold shadow-md transition-all active:scale-95"
                 >
                   Enter Bonfire
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveModal('none')}
-                  className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white font-serif text-xs uppercase rounded"
+                  className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white font-serif text-xs uppercase rounded-xl transition-all"
                 >
                   Cancel
                 </button>
@@ -286,6 +360,14 @@ export const LandingStage: React.FC<LandingStageProps> = ({
           </div>
         </div>
       )}
+
+      {/* Public Lobby Browser Modal (Among Us Style) */}
+      <LobbyBrowserModal
+        isOpen={activeModal === 'browse'}
+        onClose={() => setActiveModal('none')}
+        onJoinRoom={handleBrowserJoin}
+        onHostNewRoom={() => setActiveModal('host')}
+      />
 
       {/* How to Play Modal */}
       <HowToPlayModal

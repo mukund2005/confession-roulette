@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Crown, Users, Play, Copy, Check, Share2, Flame, Sparkles } from 'lucide-react';
-import { MAX_PLAYERS, type Player, type Room } from '../types/game';
+import { Crown, Play, Copy, Check, Share2, Flame, AlertCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { MAX_PLAYERS, MIN_PLAYERS_TO_START, type Player, type Room } from '../types/game';
+import { getCamperAvatar } from '../utils/avatars';
 import { audioTheme } from '../utils/audioTheme';
 
 interface LobbyStageProps {
@@ -21,11 +23,7 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
-  const [autoCountdown, setAutoCountdown] = useState<number | null>(null);
-  const targetTimeRef = useRef<number | null>(null);
-  const autoStartRef = useRef(false);
-  const onStartGameRef = useRef(onStartGame);
-  onStartGameRef.current = onStartGame;
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const prevCountRef = useRef(players.length);
 
   // Play join chime when a new camper sits down
@@ -51,7 +49,7 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'Join my Rupiko Bonfire!',
+          title: 'Join my Bonfire on Rupiko!',
           text: `Join our circle of ${MAX_PLAYERS} campers around the bonfire! Code: ${room.roomCode}`,
           url: link,
         });
@@ -67,73 +65,52 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
   };
 
   const handleStart = async () => {
+    if (!isHost) return;
+    if (players.length < MIN_PLAYERS_TO_START) {
+      setErrorMsg(`Need at least ${MIN_PLAYERS_TO_START} campers seated to ignite the fire.`);
+      return;
+    }
+
     audioTheme.playClickSound();
     setIsStarting(true);
+    setErrorMsg(null);
     try {
       await onStartGame();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to light bonfire');
     } finally {
       setIsStarting(false);
     }
   };
 
-  // Automatic Game Start when MAX_PLAYERS real campers are seated
-  useEffect(() => {
-    if (players.length < MAX_PLAYERS) {
-      targetTimeRef.current = null;
-      setAutoCountdown(null);
-      return;
-    }
+  const hostPlayer = players.find((p) => p.id === room.hostId) || players.find((p) => p.isHost) || players[0];
+  const canStart = players.length >= MIN_PLAYERS_TO_START;
 
-    if (!targetTimeRef.current) {
-      targetTimeRef.current = Date.now() + 3000;
-    }
-
-    const interval = setInterval(() => {
-      if (!targetTimeRef.current) return;
-      const diff = Math.max(0, Math.ceil((targetTimeRef.current - Date.now()) / 1000));
-      setAutoCountdown(diff);
-
-      if (diff === 0) {
-        clearInterval(interval);
-        if (!autoStartRef.current) {
-          autoStartRef.current = true;
-          setIsStarting(true);
-          onStartGameRef.current();
-        }
-      }
-    }, 250);
-
-    return () => clearInterval(interval);
-  }, [players.length]);
-
-  const isFullCircle = players.length >= MAX_PLAYERS;
+  // 6 Circular Seating Angles (degrees)
+  // Top (270°), Top-Right (330°), Bottom-Right (30°), Bottom (90°), Bottom-Left (150°), Top-Left (210°)
+  const seatAngles = [270, 330, 30, 90, 150, 210];
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-4 max-w-4xl mx-auto font-serif">
-      {/* Campfire Centerpiece */}
-      <div className="flex flex-col items-center text-center mb-6">
-        <img
-          src="/campfire.png"
-          alt="Bonfire"
-          className="w-28 h-28 object-contain drop-shadow-[0_10px_25px_rgba(249,115,22,0.45)] mb-3 animate-pulse-subtle"
-        />
-        <span className="text-xs font-serif tracking-widest text-amber-400 uppercase bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20 flex items-center gap-1.5">
-          <Flame className="h-3.5 w-3.5" /> Gathering Around The Bonfire
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-3 sm:p-4 max-w-4xl mx-auto font-serif select-none">
+      {/* Bonfire Status Badge */}
+      <div className="flex flex-col items-center text-center mb-4">
+        <span className="text-xs font-serif tracking-widest text-amber-400 uppercase bg-amber-500/10 px-3.5 py-1 rounded-full border border-amber-500/20 flex items-center gap-1.5 shadow-sm">
+          <Flame className="h-3.5 w-3.5 fill-current animate-pulse text-amber-400" /> Gathering Around The Bonfire
         </span>
-        <h1 className="text-3xl sm:text-4xl font-serif text-white mt-2">
+        <h1 className="text-2xl sm:text-4xl font-serif text-white mt-1.5 font-bold">
           {players.length} / {MAX_PLAYERS} Campers Seated
         </h1>
-        <p className="text-white/60 text-xs sm:text-sm mt-1 max-w-md mx-auto">
-          {isFullCircle
-            ? `All ${MAX_PLAYERS} real campers seated around the fire! Starting automatically...`
-            : `Share the bonfire code with ${MAX_PLAYERS - 1} friends. The game automatically ignites when ${MAX_PLAYERS} players are seated.`}
+        <p className="text-white/60 text-xs sm:text-sm mt-0.5 max-w-md mx-auto font-sans">
+          {players.length >= MAX_PLAYERS
+            ? 'The circle is full! Host can ignite the flame.'
+            : `Invite your friends with the bonfire code. Need ${Math.max(0, MIN_PLAYERS_TO_START - players.length)} more to start.`}
         </p>
       </div>
 
       {/* Bonfire Code & Share Card */}
-      <div className="bg-[#121214] border border-white/15 p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 w-full max-w-xl shadow-xl mb-6">
+      <div className="bg-[#121214] border border-white/15 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 w-full max-w-xl shadow-xl mb-6">
         <div className="text-center sm:text-left">
-          <span className="text-[10px] text-white/40 uppercase font-sans tracking-wider block font-semibold">
+          <span className="text-[10px] text-white/40 uppercase font-sans tracking-wider block font-bold">
             Bonfire Code
           </span>
           <div className="text-3xl font-mono font-black tracking-widest text-[#fbbf24]">
@@ -149,7 +126,7 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
           >
             {copiedLink ? (
               <>
-                <Check className="h-4 w-4" />
+                <Check className="h-4 w-4 text-emerald-600" />
                 <span>Link Copied</span>
               </>
             ) : (
@@ -171,151 +148,186 @@ export const LobbyStage: React.FC<LobbyStageProps> = ({
             ) : (
               <>
                 <Copy className="h-4 w-4 text-white/60" />
-                <span>Code</span>
+                <span>Copy Code</span>
               </>
             )}
           </button>
         </div>
       </div>
 
-      {/* Connected Campers Grid (Up to MAX_PLAYERS) */}
-      <div className="w-full max-w-2xl bg-[#121214]/80 border border-white/10 rounded-2xl p-6 mb-6">
-        <div className="flex items-center justify-between mb-4 font-sans">
-          <div className="flex items-center gap-2 text-xs font-bold text-white/80 uppercase tracking-wider">
-            <Users className="h-4 w-4 text-amber-400" />
-            <span>Circle of Campers ({players.length} / {MAX_PLAYERS})</span>
+      {/* CIRCULAR BONFIRE ARENA */}
+      <div className="relative w-[340px] h-[340px] sm:w-[440px] sm:h-[440px] my-2 flex items-center justify-center">
+        {/* Ambient Campfire Glow Rings */}
+        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-amber-600/10 via-orange-500/15 to-transparent blur-2xl pointer-events-none animate-pulse-subtle" />
+        <div className="absolute w-[260px] h-[260px] sm:w-[330px] sm:h-[330px] rounded-full border border-dashed border-amber-500/20 pointer-events-none" />
+
+        {/* Centerpiece: Campfire Graphic with Flame Animations */}
+        <div className="relative z-10 flex flex-col items-center justify-center text-center">
+          <div className="relative flex items-center justify-center">
+            {/* Pulsing Ember Halo */}
+            <div className="absolute -inset-4 rounded-full bg-amber-500/20 blur-xl animate-pulse" />
+
+            <img
+              src="/campfire.png"
+              alt="Bonfire"
+              className="w-24 h-24 sm:w-28 sm:h-28 object-contain drop-shadow-[0_12px_30px_rgba(249,115,22,0.6)] animate-pulse-subtle"
+            />
           </div>
-          <span className="text-[11px] text-amber-400 font-medium">
-            {MAX_PLAYERS - players.length > 0 ? `${MAX_PLAYERS - players.length} seats remaining` : 'Full Circle'}
+          <span className="text-[11px] font-serif uppercase tracking-widest text-amber-400/90 font-bold mt-1 bg-black/60 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+            {players.length} / 6 Seated
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-          {players.map((player) => {
-            const isPlayerHost = player.id === room.hostId;
-            const isMe = player.id === currentPlayer?.id;
+        {/* 6 Circular Seats Around the Bonfire */}
+        {seatAngles.map((angleDeg, seatIndex) => {
+          // Convert to radians (0° is East, 270° is North)
+          const angleRad = (angleDeg * Math.PI) / 180;
+          // Radius based on screen size (desktop vs mobile)
+          const radiusPct = 40; // 40% from center
+          const x = 50 + radiusPct * Math.cos(angleRad);
+          const y = 50 + radiusPct * Math.sin(angleRad);
 
-            return (
-              <div
-                key={player.id}
-                className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
-                  isMe
-                    ? 'bg-amber-500/10 border-amber-500/40 shadow-[0_0_15px_rgba(251,191,36,0.15)]'
-                    : 'bg-black/60 border-white/10'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className={`h-9 w-9 rounded-xl flex items-center justify-center font-bold text-sm ${
-                      isPlayerHost
-                        ? 'bg-amber-400 text-black shadow-md'
-                        : isMe
-                        ? 'bg-amber-500/30 text-amber-300'
-                        : 'bg-white/10 text-white'
-                    }`}
+          const player = players[seatIndex] || null;
+          const isSeatHost = player ? (player.id === room.hostId || player.isHost) : false;
+          const isMe = player ? player.id === currentPlayer?.id : false;
+          const avatar = player ? getCamperAvatar(player.avatarIndex) : null;
+
+          return (
+            <div
+              key={seatIndex}
+              style={{
+                position: 'absolute',
+                top: `${y}%`,
+                left: `${x}%`,
+                transform: 'translate(-50%, -50%)',
+              }}
+              className="z-20"
+            >
+              <AnimatePresence mode="wait">
+                {player && avatar ? (
+                  /* Occupied Seat with Framer Motion entry */
+                  <motion.div
+                    key={player.id}
+                    initial={{ scale: 0, opacity: 0, y: 10 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                    className="flex flex-col items-center group cursor-pointer"
                   >
-                    {player.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5 font-sans">
-                      <span className="text-xs font-semibold text-white">{player.name}</span>
-                      {isMe && (
-                        <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1 rounded font-bold">
-                          YOU
-                        </span>
+                    {/* Avatar Circle with Glow & Host Crown */}
+                    <div className="relative">
+                      {isSeatHost && (
+                        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-30">
+                          <span className="h-6 w-6 rounded-full bg-amber-400 text-black flex items-center justify-center shadow-lg shadow-amber-500/50 border border-white/40 animate-bounce">
+                            <Crown className="h-3.5 w-3.5 fill-current" />
+                          </span>
+                        </div>
                       )}
+
+                      <div
+                        className={`h-12 w-12 sm:h-14 sm:w-14 rounded-2xl ${avatar.bgColor} border-2 ${
+                          isMe
+                            ? 'border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.4)]'
+                            : avatar.borderColor
+                        } flex items-center justify-center text-2xl sm:text-3xl transition-transform hover:scale-110 shadow-lg relative`}
+                      >
+                        {avatar.emoji}
+
+                        {/* Online firefly pulse */}
+                        <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-400 border-2 border-black animate-pulse" />
+                      </div>
                     </div>
-                    <span className="text-[10px] text-white/50 flex items-center gap-1">
-                      {isPlayerHost ? (
-                        <>
-                          <Crown className="h-3 w-3 text-amber-400" /> Host
-                        </>
-                      ) : (
-                        'Seated'
-                      )}
+
+                    {/* Name & Role Badge */}
+                    <div className="flex flex-col items-center mt-1 text-center font-sans">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-bold text-white max-w-[70px] truncate">
+                          {player.name}
+                        </span>
+                        {isMe && (
+                          <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-bold">
+                            YOU
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-amber-300/70 font-serif">
+                        {isSeatHost ? 'Campfire Host' : 'Camper'}
+                      </span>
+                    </div>
+                  </motion.div>
+                ) : (
+                  /* Empty Campfire Seat Placeholder */
+                  <div className="flex flex-col items-center opacity-40 hover:opacity-75 transition-opacity">
+                    <div className="h-11 w-11 sm:h-13 sm:w-13 rounded-2xl border-2 border-dashed border-white/30 bg-black/40 flex items-center justify-center text-xs text-white/50 shadow-inner">
+                      ?
+                    </div>
+                    <span className="text-[10px] font-sans text-white/40 mt-1 italic">
+                      Seat {seatIndex + 1}
                     </span>
                   </div>
-                </div>
-
-                <div className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-              </div>
-            );
-          })}
-
-          {/* Empty Seats Placeholders up to MAX_PLAYERS */}
-          {Array.from({ length: Math.max(0, MAX_PLAYERS - players.length) }).map((_, idx) => (
-            <div
-              key={`empty-${idx}`}
-              className="flex items-center gap-2.5 p-3 rounded-xl border border-dashed border-white/10 bg-black/30 opacity-40 font-sans"
-            >
-              <div className="h-9 w-9 rounded-xl border border-dashed border-white/20 flex items-center justify-center text-xs text-white/40">
-                ?
-              </div>
-              <span className="text-xs text-white/40 italic">Waiting for player...</span>
+                )}
+              </AnimatePresence>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
-      {/* Auto-Start Status or Countdown */}
-      <div className="w-full max-w-md">
-        {autoCountdown !== null ? (
-          /* Auto-Countdown notification when MAX_PLAYERS campers are seated */
-          <div className="text-center p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 animate-pulse">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <Sparkles className="h-4 w-4 text-amber-400" />
-              <span className="text-xs font-serif uppercase tracking-widest font-bold">
-                Circle of {MAX_PLAYERS} Complete
-              </span>
-            </div>
-            <div className="text-2xl font-serif font-black text-white my-1">
-              Igniting the Bonfire in {autoCountdown}s...
-            </div>
-            <p className="text-[11px] text-white/60 font-sans mb-3">
-              Get ready to whisper your confession into the flames.
-            </p>
+      {/* Error Notice */}
+      {errorMsg && (
+        <div className="mb-3 px-4 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-sans flex items-center gap-2 animate-shake">
+          <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {/* HOST-EXCLUSIVE GAME START AUTHORITY CONTROLS */}
+      <div className="w-full max-w-md mt-2">
+        {isHost ? (
+          /* Host View: Visible Exclusively to the Host */
+          <div className="flex flex-col items-center text-center">
             <button
               type="button"
-              onClick={() => {
-                audioTheme.playClickSound();
-                setIsStarting(true);
-                onStartGame();
-              }}
-              className="px-5 py-2 bg-[#fbbf24] hover:bg-white text-black font-serif text-xs font-bold rounded-xl uppercase tracking-widest shadow-md hover:scale-105 active:scale-95 transition-all inline-flex items-center gap-1.5"
+              onClick={handleStart}
+              disabled={isStarting || !canStart}
+              className={`w-full py-4 rounded-2xl font-serif font-bold text-sm uppercase tracking-widest transition-all shadow-xl flex items-center justify-center gap-2 ${
+                canStart
+                  ? 'bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-white hover:to-amber-300 text-black shadow-amber-500/20 hover:scale-[1.02] active:scale-[0.98]'
+                  : 'bg-zinc-800 text-zinc-500 border border-zinc-700/60 cursor-not-allowed opacity-60'
+              }`}
             >
-              <Flame className="h-3.5 w-3.5 fill-current" />
-              <span>Ignite Now</span>
+              {isStarting ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-4 w-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                  Igniting the Embers...
+                </span>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 fill-current" />
+                  <span>
+                    Light the Bonfire ({players.length}/{MAX_PLAYERS} Campers)
+                  </span>
+                </>
+              )}
             </button>
-          </div>
-        ) : isHost ? (
-          /* Host Manual start option if they want to ignite */
-          <button
-            onClick={handleStart}
-            disabled={isStarting || players.length < 1}
-            className="w-full py-4 rounded-xl bg-[#e2e8f0] hover:bg-white text-black font-serif font-bold text-sm uppercase tracking-widest shadow-xl shadow-white/10 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isStarting ? (
-              <span className="flex items-center gap-2">
-                <span className="h-4 w-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-                Igniting the Embers...
-              </span>
-            ) : (
-              <>
-                <Play className="h-4 w-4 fill-current" />
-                <span>Ignite Bonfire ({players.length}/{MAX_PLAYERS} Campers)</span>
-              </>
+
+            {!canStart && (
+              <p className="text-xs text-amber-400/80 font-sans mt-2 flex items-center gap-1.5">
+                <AlertCircle className="h-3.5 w-3.5" />
+                Need at least {MIN_PLAYERS_TO_START} campers to ignite the fire ({players.length}/{MIN_PLAYERS_TO_START} seated).
+              </p>
             )}
-          </button>
+          </div>
         ) : (
-          <div className="text-center p-4 rounded-xl bg-[#121214] border border-white/15">
-            <div className="flex items-center justify-center gap-2 text-amber-400 mb-1">
-              <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
-              <span className="text-xs font-serif uppercase tracking-wider">
-                Waiting for {MAX_PLAYERS} campers to be seated...
+          /* Guest View: Non-host participants must NEVER see a start button */
+          <div className="text-center p-4 rounded-2xl bg-[#121214] border border-white/15 shadow-lg">
+            <div className="flex items-center justify-center gap-2 text-amber-400 mb-1.5 font-serif font-bold text-xs uppercase tracking-wider">
+              <span className="h-2.5 w-2.5 rounded-full bg-amber-400 animate-ping" />
+              <span>
+                Waiting for host {hostPlayer?.name || 'the host'} to light the fire...
               </span>
             </div>
             <p className="text-xs text-white/50 font-sans">
-              The bonfire automatically ignites once all {MAX_PLAYERS} seats are filled.
+              Only the campfire host has the flame to ignite the bonfire once everyone is seated.
             </p>
           </div>
         )}

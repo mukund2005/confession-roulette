@@ -1,5 +1,17 @@
-import React from 'react';
-import { X, Flame, Mic, Shield, Crown, Sparkles, CheckCircle2 } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  X,
+  Flame,
+  Mic,
+  Shield,
+  Crown,
+  Sparkles,
+  CheckCircle2,
+  Users,
+  Trophy,
+  Volume2,
+  Gamepad2,
+} from 'lucide-react';
 import { audioTheme } from '../utils/audioTheme';
 
 interface HowToPlayModalProps {
@@ -8,6 +20,8 @@ interface HowToPlayModalProps {
 }
 
 export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ isOpen, onClose }) => {
+  const [activeTab, setActiveTab] = useState<'steps' | 'minigame'>('steps');
+
   if (!isOpen) return null;
 
   const handleClose = () => {
@@ -15,70 +29,94 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ isOpen, onClose 
     onClose();
   };
 
-  const stages = [
+  const steps = [
     {
       num: '1',
-      title: 'The Bonfire Gathering (Lobby)',
-      icon: Flame,
+      badge: 'LOBBY',
+      title: 'Gather Around the Bonfire',
+      subtitle: '3 to 6 Campers Required',
+      icon: Users,
       color: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
-      description:
-        '4 real campers take their seats around the campfire. Use Quick Match or share your 4-letter bonfire code. The fire ignites automatically as soon as all 4 seats are filled!',
+      bullets: [
+        'Join via Quick Play, Browse Public Bonfires, or enter a 4-letter room code.',
+        'Choose your camper avatar (Fox, Bear, Wolf, Owl, and more).',
+        'Only the Host has the power to light the fire once at least 3 campers are seated.',
+      ],
     },
     {
       num: '2',
-      title: 'Voice Confessions (15–30s)',
+      badge: 'RECORDING',
+      title: 'Whisper Your Secret',
+      subtitle: '15–30s Private Voice Note',
       icon: Mic,
       color: 'text-rose-400 bg-rose-500/10 border-rose-500/30',
-      description:
-        'Receive a secret spicy confession prompt and record your voice confession into your mic. The minigame launches immediately once all 4 campers seal their secrets.',
+      bullets: [
+        'Receive a secret spicy confession prompt (or hit Shuffle for a new one).',
+        'Hold record and speak into your microphone to seal your confession.',
+        'Once all campers record their confessions, the minigame launches automatically!',
+      ],
     },
     {
       num: '3',
-      title: 'Round 1 Minigame: Balloon Popping Frenzy',
-      icon: Sparkles,
-      color: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
-      description:
-        'A 30-second synchronized clicker duel! Tap floating balloons before time expires. Normal balloons give +1, golden balloons give +3, and bombs deduct -2. The camper with the highest score wins Immunity (Winner 1)!',
+      badge: 'ROUND 1 MINIGAME',
+      title: 'Balloon Popping Frenzy',
+      subtitle: '30-Second Synchronized Clicker',
+      icon: Gamepad2,
+      color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30',
+      bullets: [
+        'All campers tap and click rising balloons simultaneously.',
+        'Pop normal balloons (+1) and rare golden balloons (+3); avoid dark bombs (-2)!',
+        'The camper with the highest score is crowned Winner 1 and wins Absolute Immunity!',
+      ],
     },
     {
       num: '4',
-      title: 'Synchronized Confession Listening',
-      icon: Shield,
+      badge: 'THE REVEAL',
+      title: 'The Bonfire Reveals All',
+      subtitle: 'Synchronized Campfire Listening',
+      icon: Volume2,
       color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
-      description:
-        'Winner 1 achieves absolute immunity—their confession is permanently locked in the vault! All other confessions are then played aloud to everyone synchronously around the fire.',
+      bullets: [
+        "Winner 1's confession is permanently locked in the vault—it will NEVER be played!",
+        'All other campers have their voice confessions played aloud to everyone around the fire.',
+        'Listen together in real time with synchronized waveforms and flame effects.',
+      ],
     },
     {
       num: '5',
-      title: 'The Twist: Winner 1 Chooses Winner 2',
+      badge: 'VICTORY PODIUM',
+      title: 'Winner 1 Chooses Winner 2',
+      subtitle: 'The Final Twist',
       icon: Crown,
-      color: 'text-rose-400 bg-rose-500/10 border-rose-500/30',
-      description:
-        'After all non-immune confessions have been heard around the campfire, Winner 1 hand-picks the second survivor (Winner 2) from the remaining campers to join them on the victory podium.',
+      color: 'text-purple-400 bg-purple-500/10 border-purple-500/30',
+      bullets: [
+        'Winner 1 hand-picks one fellow camper to share immunity.',
+        'Both winners celebrate together on the victory podium as the ultimate survivors!',
+      ],
     },
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md font-serif animate-fadeIn">
-      <div className="bg-[#121214] border border-white/20 rounded-3xl p-6 sm:p-8 max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden">
-        {/* Glow accent */}
-        <div className="absolute -top-16 -right-16 w-48 h-48 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md font-serif animate-fadeIn select-none">
+      <div className="bg-[#121214] border border-white/20 rounded-3xl p-5 sm:p-7 max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden">
+        {/* Glow ambient background */}
+        <div className="absolute -top-16 -right-16 w-52 h-52 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
 
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
-              <Flame className="h-5 w-5" />
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center shadow-lg shadow-amber-500/10">
+              <Flame className="h-5 w-5 fill-current" />
             </div>
             <div>
-              <h2 className="text-xl sm:text-2xl font-serif text-white flex items-center gap-2">
+              <h2 className="text-xl sm:text-2xl font-serif text-white font-bold flex items-center gap-2">
                 <span>How To Play Rupiko</span>
                 <span className="text-[10px] font-sans font-bold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full uppercase tracking-wider border border-amber-500/30">
-                  Online Multiplayer
+                  Quick Guide
                 </span>
               </h2>
               <p className="text-xs text-white/50 font-sans">
-                The game of secret confessions, disguised voices, and campfire deduction.
+                The multiplayer game of secret confessions, fast reflexes, and campfire survival.
               </p>
             </div>
           </div>
@@ -92,60 +130,159 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ isOpen, onClose 
           </button>
         </div>
 
-        {/* Scrollable Stage Content */}
-        <div className="overflow-y-auto pr-1 py-4 space-y-3.5 flex-1 font-sans">
-          {stages.map((stage) => {
-            const Icon = stage.icon;
-            return (
-              <div
-                key={stage.num}
-                className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-black/50 border border-white/10 hover:border-white/20 transition-all"
-              >
-                <div
-                  className={`h-10 w-10 shrink-0 rounded-xl border flex items-center justify-center font-bold font-serif text-base shadow-sm ${stage.color}`}
-                >
-                  <Icon className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-bold text-white/40 uppercase tracking-widest font-mono">
-                      STAGE {stage.num}
-                    </span>
-                    <h3 className="text-sm font-bold text-white font-serif">{stage.title}</h3>
-                  </div>
-                  <p className="text-xs text-slate-300 leading-relaxed">{stage.description}</p>
-                </div>
-              </div>
-            );
-          })}
-
-          {/* Pro Tips Box */}
-          <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/20 mt-4">
-            <span className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5 mb-2 font-serif">
-              <Sparkles className="h-4 w-4" /> Pro-Tips For Winning
-            </span>
-            <ul className="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
-              <li>
-                <strong className="text-white">Be quick & precise:</strong> In Balloon Popping Frenzy, aim for golden balloons (+3) and steer clear of dark bomb balloons (-2)!
-              </li>
-              <li>
-                <strong className="text-white">Tie-breaker edge:</strong> If multiple campers finish with the same top score, whoever popped their final balloon first wins the tie-break!
-              </li>
-              <li>
-                <strong className="text-white">Win immunity:</strong> The player crowned Winner 1 in the minigame keeps their confession permanently protected from being heard.
-              </li>
-            </ul>
+        {/* TL;DR Goal Banner */}
+        <div className="my-3 p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-orange-500/10 to-transparent border border-amber-500/30 shrink-0 font-sans">
+          <div className="flex items-center gap-2 text-xs font-bold text-amber-300 uppercase tracking-wider mb-1">
+            <Trophy className="h-4 w-4 text-amber-400 shrink-0" />
+            <span>The Objective</span>
           </div>
+          <p className="text-xs text-white/90 leading-relaxed">
+            Keep your spicy confession safe from being heard! Win the 30-second minigame to lock your secret in the vault forever. Two campers survive—everyone else gets exposed!
+          </p>
         </div>
 
+        {/* Navigation Tabs */}
+        <div className="flex gap-2 mb-3 shrink-0 font-sans">
+          <button
+            type="button"
+            onClick={() => {
+              audioTheme.playClickSound();
+              setActiveTab('steps');
+            }}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'steps'
+                ? 'bg-white text-black shadow-md'
+                : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            <Flame className="h-3.5 w-3.5" />
+            <span>5 Steps to Play</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              audioTheme.playClickSound();
+              setActiveTab('minigame');
+            }}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'minigame'
+                ? 'bg-white text-black shadow-md'
+                : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            <Gamepad2 className="h-3.5 w-3.5" />
+            <span>Minigame Rules & Scoring</span>
+          </button>
+        </div>
+
+        {/* Tab 1: 5 Steps to Play */}
+        {activeTab === 'steps' ? (
+          <div className="overflow-y-auto pr-1 space-y-3 flex-1 font-sans">
+            {steps.map((step) => {
+              const Icon = step.icon;
+              return (
+                <div
+                  key={step.num}
+                  className="p-3.5 rounded-2xl bg-black/60 border border-white/10 hover:border-amber-500/30 transition-all flex items-start gap-3.5"
+                >
+                  <div
+                    className={`h-10 w-10 shrink-0 rounded-2xl border flex items-center justify-center font-bold font-serif shadow-md ${step.color}`}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-white/10 text-white/60">
+                        {step.badge}
+                      </span>
+                      <h3 className="text-sm font-bold text-white font-serif">{step.title}</h3>
+                      <span className="text-[11px] text-amber-400 font-medium ml-auto">
+                        {step.subtitle}
+                      </span>
+                    </div>
+
+                    <ul className="text-xs text-white/70 space-y-1 list-disc list-inside mt-1.5">
+                      {step.bullets.map((bullet, idx) => (
+                        <li key={idx} className="leading-relaxed">
+                          {bullet}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* Tab 2: Minigame Scoring & Controls */
+          <div className="overflow-y-auto pr-1 space-y-3 flex-1 font-sans">
+            {/* Scoring Legend */}
+            <div className="p-4 rounded-2xl bg-black/60 border border-white/10 space-y-3">
+              <h3 className="text-sm font-bold text-white font-serif flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-amber-400" />
+                <span>Balloon Popping Frenzy Points</span>
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-center">
+                  <div className="text-2xl mb-1">🎈</div>
+                  <div className="text-xs font-bold text-rose-300">Normal Balloon</div>
+                  <div className="text-lg font-mono font-black text-white mt-0.5">+1 Point</div>
+                  <p className="text-[10px] text-white/50 mt-1">Multi-colored, floats up at steady speed</p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-center">
+                  <div className="text-2xl mb-1">⭐</div>
+                  <div className="text-xs font-bold text-amber-300">Golden Balloon</div>
+                  <div className="text-lg font-mono font-black text-amber-400 mt-0.5">+3 Points!</div>
+                  <p className="text-[10px] text-white/50 mt-1">Rare, smaller and faster with golden glow</p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-zinc-800/60 border border-red-500/30 text-center">
+                  <div className="text-2xl mb-1">💣</div>
+                  <div className="text-xs font-bold text-red-400">Bomb Balloon</div>
+                  <div className="text-lg font-mono font-black text-red-400 mt-0.5">-2 Points</div>
+                  <p className="text-[10px] text-white/50 mt-1">Dark obsidian balloon; do not tap!</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Tie-Breaker & Immunity Info */}
+            <div className="p-4 rounded-2xl bg-black/60 border border-white/10 space-y-2.5">
+              <h3 className="text-sm font-bold text-white font-serif flex items-center gap-2">
+                <Shield className="h-4 w-4 text-emerald-400" />
+                <span>Tie-Breakers & Immunity Rules</span>
+              </h3>
+
+              <ul className="text-xs text-white/80 space-y-2 list-disc list-inside">
+                <li>
+                  <strong className="text-amber-300">Earliest Final Pop:</strong> If two or more campers finish with the same top score, the tie is awarded to whoever popped their final balloon first!
+                </li>
+                <li>
+                  <strong className="text-emerald-300">Vault Immunity:</strong> Winner 1 is permanently exempted from confession reveals. Your voice recording stays 100% confidential.
+                </li>
+                <li>
+                  <strong className="text-purple-300">Surviving Together:</strong> Winner 1 then hand-picks a second player to join them on the victory podium.
+                </li>
+              </ul>
+            </div>
+          </div>
+        )}
+
         {/* Modal Footer */}
-        <div className="pt-4 border-t border-white/10 shrink-0 flex justify-end">
+        <div className="pt-3.5 border-t border-white/10 shrink-0 flex items-center justify-between font-sans">
+          <span className="text-xs text-white/40">
+            3–6 Campers • Free Online Multiplayer
+          </span>
+
           <button
             type="button"
             onClick={handleClose}
-            className="w-full sm:w-auto px-6 py-3 bg-[#e2e8f0] hover:bg-white text-black font-serif font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
+            className="px-6 py-2.5 bg-[#e2e8f0] hover:bg-white text-black font-serif font-bold text-xs uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95 flex items-center gap-1.5"
           >
-            <CheckCircle2 className="h-4 w-4" />
+            <CheckCircle2 className="h-4 w-4 text-emerald-700" />
             <span>Got It, Let's Play!</span>
           </button>
         </div>

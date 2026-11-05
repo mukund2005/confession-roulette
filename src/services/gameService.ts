@@ -1,5 +1,5 @@
 import { supabase, SUPABASE_URL, SUPABASE_KEY } from '../lib/supabase';
-import { MAX_PLAYERS } from '../types/game';
+import { MAX_PLAYERS, MIN_PLAYERS_TO_START, type PublicLobbyInfo } from '../types/game';
 import type { Player, Room, Guess, AnonymousVoice } from '../types/game';
 import { generateRoundRobinSchedule } from '../utils/roundRobin';
 
@@ -30,6 +30,8 @@ export const gameService = {
       roomCode: r.room_code,
       status: r.status,
       hostId: r.host_id,
+      currentPlayers: r.current_players,
+      maxPlayers: r.max_players || MAX_PLAYERS,
       winner1Id: r.winner1_id,
       winner2Id: r.winner2_id,
       activeAudioPlayerId: r.active_audio_player_id,
@@ -47,10 +49,25 @@ export const gameService = {
 
   // Map Supabase player record to Player interface
   mapPlayer(p: any): Player {
+    let name = p.name || '';
+    let avatarIndex = p.avatar_index !== undefined ? p.avatar_index : 0;
+
+    // Graceful extraction if avatar was serialized in name (fallback when schema column not yet added)
+    if (name.includes('#')) {
+      const parts = name.split('#');
+      const parsed = parseInt(parts[parts.length - 1], 10);
+      if (!isNaN(parsed) && parsed >= 0 && parsed <= 7) {
+        avatarIndex = parsed;
+        name = parts.slice(0, -1).join('#');
+      }
+    }
+
     return {
       id: p.id,
       roomId: p.room_id,
-      name: p.name,
+      name,
+      avatarIndex,
+      isHost: Boolean(p.is_host),
       audioUrl: p.audio_url,
       hasRecorded: p.has_recorded,
       score: p.score || 0,
@@ -59,53 +76,111 @@ export const gameService = {
       correctGuessesCount: p.correct_guesses_count || 0,
       isSafe: p.is_safe || false,
       createdAt: p.created_at,
+      joinedAt: p.joined_at || p.created_at,
     };
   },
 
-  // Quick Match: Find an open public bonfire with < MAX_PLAYERS, or create one
-  async findOrCreatePublicBonfire(playerName: string): Promise<{ room: Room; player: Player; allPlayers: Player[] }> {
+  // Browse live public lobbies (Among Us style)
+  async browsePublicLobbies(): Promise<PublicLobbyInfo[]> {
+    try {
+      const { data: openRooms, error } = await supabase
+        .from('rooms')
+        .select('*, players(id, name, avatar_index, is_host)')
+        .eq('status', 'LOBBY')
+        .eq('is_public', true)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error || !openRooms) {
+        console.warn('Could not browse lobbies:', error);
+        return [];
+      }
+
+      return openRooms
+        .filter((r) => r.players && r.players.length > 0)
+        .map((r) => {
+          const players = r.players || [];
+          const hostPlayer = players.find((p: any) => p.id === r.host_id) || players[0];
+          return {
+            id: r.id,
+            roomCode: r.room_code,
+            hostName: hostPlayer ? hostPlayer.name : 'Campfire Host',
+            hostAvatar: hostPlayer && hostPlayer.avatar_index !== undefined ? hostPlayer.avatar_index : 0,
+            playerCount: players.length,
+            maxPlayers: r.max_players || MAX_PLAYERS,
+            status: r.status,
+            createdAt: r.created_at,
+          };
+        });
+    } catch (e) {
+      console.warn('Error in browsePublicLobbies:', e);
+      return [];
+    }
+  },
+
+  // Auto-Matchmaking ("Quick Play / Join Bonfire"): FIFO oldest open room, or creates new
+  async findOrCreatePublicBonfire(
+    playerName: string,
+    avatarIndex: number = 0
+  ): Promise<{ room: Room; player: Player; allPlayers: Player[] }> {
+    // 1. Query active rooms FIFO (oldest open room first)
     const { data: openRooms, error } = await supabase
       .from('rooms')
       .select('*, players(*)')
       .eq('status', 'LOBBY')
       .eq('is_public', true)
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: true }) // FIFO filling
       .limit(10);
 
     if (!error && openRooms && openRooms.length > 0) {
       for (const r of openRooms) {
         const count = r.players ? r.players.length : 0;
+        // Strictly capped at MAX_PLAYERS (6)
         if (count > 0 && count < MAX_PLAYERS) {
           try {
-            return await this.joinRoom(r.room_code, playerName);
+            return await this.joinRoom(r.room_code, playerName, avatarIndex);
           } catch {
-            // Next candidate
+            // Room might have filled up or locked, try next candidate
           }
         }
       }
     }
 
-    return await this.createRoom(playerName);
+    // 2. If no valid open room, automatically create new room as Host
+    return await this.createRoom(playerName, avatarIndex);
   },
 
-  // Start play: real 4-player matchmaking without bots
-  async startSoloPlay(playerName: string): Promise<{ room: Room; player: Player; allPlayers: Player[] }> {
-    return this.findOrCreatePublicBonfire(playerName);
+  // Start play: real matchmaking alias
+  async startSoloPlay(playerName: string, avatarIndex: number = 0): Promise<{ room: Room; player: Player; allPlayers: Player[] }> {
+    return this.findOrCreatePublicBonfire(playerName, avatarIndex);
   },
 
-  // Create a room in Supabase
-  async createRoom(hostName: string): Promise<{ room: Room; player: Player; allPlayers: Player[] }> {
+  // Host a Room (The "Bonfire"): generates unique 4-character code, sets host_id, max_players = 6
+  async hostRoom(
+    hostName: string,
+    avatarIndex: number = 0
+  ): Promise<{ room: Room; player: Player; allPlayers: Player[] }> {
+    return this.createRoom(hostName, avatarIndex);
+  },
+
+  // Create a room in Supabase with Host role
+  async createRoom(
+    hostName: string,
+    avatarIndex: number = 0
+  ): Promise<{ room: Room; player: Player; allPlayers: Player[] }> {
     const hostId = crypto.randomUUID();
     const roomCode = this.generateRoomCode();
 
+    const insertPayload: Record<string, any> = {
+      room_code: roomCode,
+      status: 'LOBBY',
+      host_id: hostId,
+      is_public: true,
+    };
+
     const { data: roomData, error: roomError } = await supabase
       .from('rooms')
-      .insert({
-        room_code: roomCode,
-        status: 'LOBBY',
-        host_id: hostId,
-        is_public: true,
-      })
+      .insert(insertPayload)
       .select()
       .single();
 
@@ -114,18 +189,31 @@ export const gameService = {
       throw new Error(`Failed to create room in cloud: ${roomError.message}. Make sure supabase_schema.sql was run in your Supabase SQL editor.`);
     }
 
-    const { data: playerData, error: playerError } = await supabase
+    const playerPayload: Record<string, any> = {
+      id: hostId,
+      room_id: roomData.id,
+      name: `${hostName}#${avatarIndex}`,
+      avatar_index: avatarIndex,
+      is_host: true,
+      has_recorded: false,
+      score: 0,
+      is_safe: false,
+    };
+
+    let { data: playerData, error: playerError } = await supabase
       .from('players')
-      .insert({
-        id: hostId,
-        room_id: roomData.id,
-        name: hostName,
-        has_recorded: false,
-        score: 0,
-        is_safe: false,
-      })
+      .insert(playerPayload)
       .select()
       .single();
+
+    // Fallback if avatar_index or is_host column has not yet been added in Supabase
+    if (playerError && (playerError.code === 'PGRST204' || playerError.message?.includes('column'))) {
+      delete playerPayload.avatar_index;
+      delete playerPayload.is_host;
+      const retry = await supabase.from('players').insert(playerPayload).select().single();
+      playerData = retry.data;
+      playerError = retry.error;
+    }
 
     if (playerError) {
       console.error('Supabase create host error:', playerError);
@@ -140,8 +228,12 @@ export const gameService = {
     };
   },
 
-  // Join an existing room
-  async joinRoom(roomCode: string, playerName: string): Promise<{ room: Room; player: Player; allPlayers: Player[] }> {
+  // Join an existing room with strict 6-player capacity check
+  async joinRoom(
+    roomCode: string,
+    playerName: string,
+    avatarIndex: number = 0
+  ): Promise<{ room: Room; player: Player; allPlayers: Player[] }> {
     const formattedCode = roomCode.trim().toUpperCase();
     const playerId = crypto.randomUUID();
 
@@ -157,14 +249,14 @@ export const gameService = {
     }
 
     if (!roomData) {
-      throw new Error(`Room code "${formattedCode}" not found. Verify the code with the host.`);
+      throw new Error(`Bonfire code "${formattedCode}" not found. Verify the code with the host.`);
     }
 
     if (roomData.status !== 'LOBBY') {
-      throw new Error('Game has already started in this room.');
+      throw new Error('This bonfire game is already in progress.');
     }
 
-    // Strict MAX_PLAYERS maximum cap restriction
+    // Hard room capacity limit: Strictly maximum 6 players. Under no circumstances can a 7th player enter!
     const { count: currentCampersCount } = await supabase
       .from('players')
       .select('*', { count: 'exact', head: true })
@@ -174,22 +266,35 @@ export const gameService = {
       throw new Error(`This bonfire is full (maximum ${MAX_PLAYERS} campers allowed). Please join or host another bonfire.`);
     }
 
-    const { data: playerData, error: playerError } = await supabase
+    const playerPayload: Record<string, any> = {
+      id: playerId,
+      room_id: roomData.id,
+      name: `${playerName}#${avatarIndex}`,
+      avatar_index: avatarIndex,
+      is_host: false,
+      has_recorded: false,
+      score: 0,
+      is_safe: false,
+    };
+
+    let { data: playerData, error: playerError } = await supabase
       .from('players')
-      .insert({
-        id: playerId,
-        room_id: roomData.id,
-        name: playerName,
-        has_recorded: false,
-        score: 0,
-        is_safe: false,
-      })
+      .insert(playerPayload)
       .select()
       .single();
 
+    // Fallback if avatar_index or is_host column has not yet been added in Supabase
+    if (playerError && (playerError.code === 'PGRST204' || playerError.message?.includes('column'))) {
+      delete playerPayload.avatar_index;
+      delete playerPayload.is_host;
+      const retry = await supabase.from('players').insert(playerPayload).select().single();
+      playerData = retry.data;
+      playerError = retry.error;
+    }
+
     if (playerError) {
       console.error('Supabase create player error:', playerError);
-      throw new Error(`Failed to join room: ${playerError.message}`);
+      throw new Error(`Failed to join bonfire: ${playerError.message}`);
     }
 
     // Fetch all players currently seated in this room so the joining player immediately has the full circle
@@ -207,6 +312,65 @@ export const gameService = {
       player: this.mapPlayer(playerData),
       allPlayers,
     };
+  },
+
+  // Host-Exclusive Game Start Authority with validation and atomic room lock
+  async startGameAsHost(roomId: string, callerId: string): Promise<void> {
+    // 1. Verify caller is the room host
+    const { data: roomData, error: roomError } = await supabase
+      .from('rooms')
+      .select('*')
+      .eq('id', roomId)
+      .maybeSingle();
+
+    if (roomError || !roomData) {
+      throw new Error('Room not found');
+    }
+
+    if (roomData.host_id !== callerId) {
+      throw new Error('Unauthorized: Only the host has authority to ignite the bonfire');
+    }
+
+    // 2. Verify minimum player threshold (minimum 3 players)
+    const { count: playerCount } = await supabase
+      .from('players')
+      .select('*', { count: 'exact', head: true })
+      .eq('room_id', roomId);
+
+    if (playerCount !== null && playerCount < MIN_PLAYERS_TO_START) {
+      throw new Error(`Need at least ${MIN_PLAYERS_TO_START} campers to ignite the fire (${playerCount}/${MIN_PLAYERS_TO_START} seated).`);
+    }
+
+    // 3. Atomic State Lock: transition to RECORDING and lock out public traffic (is_public = false)
+    const { error: updateError } = await supabase
+      .from('rooms')
+      .update({
+        status: 'RECORDING',
+        is_public: false,
+      })
+      .eq('id', roomId)
+      .eq('host_id', callerId);
+
+    if (updateError) {
+      throw new Error(`Failed to start game: ${updateError.message}`);
+    }
+  },
+
+  // Promote next host if current host disconnects (Host Migration Fail-Safe)
+  async promoteNextHost(roomId: string, nextHostId: string): Promise<void> {
+    try {
+      await supabase
+        .from('rooms')
+        .update({ host_id: nextHostId })
+        .eq('id', roomId);
+
+      await supabase
+        .from('players')
+        .update({ is_host: true })
+        .eq('id', nextHostId);
+    } catch (e) {
+      console.warn('Error promoting next host:', e);
+    }
   },
 
   // Update room state in cloud
