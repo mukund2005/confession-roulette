@@ -119,7 +119,7 @@ export function App() {
             onAdvanceVoice={advanceGuessVoice}
             onFinishGuessing={finishGuessingAndCrownWinner}
           />
-        ) : room.status === 'PICKING' ? (
+        ) : room.status === 'PICKING' && playerList.length > 2 ? (
           <PickingStage
             room={room}
             players={playerList}
@@ -127,7 +127,7 @@ export function App() {
             winner1={winner1}
             onPickSecondWinner={pickSecondWinner}
           />
-        ) : room.status === 'REVEAL' ? (
+        ) : room.status === 'REVEAL' || (room.status === 'PICKING' && playerList.length <= 2) ? (
           <RevealStage
             room={room}
             players={playerList}

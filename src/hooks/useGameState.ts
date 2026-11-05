@@ -566,20 +566,40 @@ export function useGameState() {
           activeAudioPlayerId: nextPlayer.id,
         });
       } else {
-        // All confessions have been heard by the entire bonfire! Transition to PICKING so Winner 1 chooses Winner 2!
-        setRoom((prev) =>
-          prev
-            ? {
-                ...prev,
-                status: 'PICKING',
-                activeAudioPlayerId: null,
-              }
-            : prev
-        );
-        await gameService.updateRoom(room.id, {
-          status: 'PICKING',
-          activeAudioPlayerId: null,
-        });
+        // All eligible confessions have been heard by the entire bonfire!
+        if (playerList.length <= 2) {
+          // 2-PLAYER DUEL: Only Winner 1 is declared. No Winner 2 and no PICKING stage!
+          setRoom((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  status: 'REVEAL',
+                  activeAudioPlayerId: null,
+                  winner2Id: null,
+                }
+              : prev
+          );
+          await gameService.updateRoom(room.id, {
+            status: 'REVEAL',
+            activeAudioPlayerId: null,
+            winner2Id: null,
+          });
+        } else {
+          // 3+ PLAYERS: Transition to PICKING so Winner 1 chooses Winner 2!
+          setRoom((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  status: 'PICKING',
+                  activeAudioPlayerId: null,
+                }
+              : prev
+          );
+          await gameService.updateRoom(room.id, {
+            status: 'PICKING',
+            activeAudioPlayerId: null,
+          });
+        }
       }
     } catch (err: any) {
       setError(err.message);

@@ -47,12 +47,16 @@ export const RevealStage: React.FC<RevealStageProps> = ({
   // Filter out Winner 1 (whose voice is permanently protected) to get the confession queue
   const queuePlayers = players.filter((p) => p.id !== room.winner1Id);
 
-  // Fire confetti if this is the Grand Finale (both Winner 1 & Winner 2 crowned)
+  const isTwoPlayerDuel = players.length <= 2;
+  const loserPlayer = isTwoPlayerDuel ? players.find((p) => p.id !== room.winner1Id) || null : null;
+  const isGrandFinale = Boolean(room.winner2Id || (isTwoPlayerDuel && !activePlayer));
+
+  // Fire confetti if this is the Grand Finale (both Winner 1 & Winner 2 crowned, or Sole Survivor in 2-player duel)
   useEffect(() => {
-    if (room.winner2Id) {
+    if (isGrandFinale) {
       try {
         confetti({
-          particleCount: 100,
+          particleCount: 110,
           spread: 80,
           origin: { y: 0.6 },
           colors: ['#fbbf24', '#f43f5e', '#34d399', '#38bdf8'],
@@ -61,7 +65,7 @@ export const RevealStage: React.FC<RevealStageProps> = ({
         // Ignore if canvas unsupported
       }
     }
-  }, [room.winner2Id]);
+  }, [isGrandFinale]);
 
   // Synchronized Audio Playback: Play on all connected devices whenever active audio changes
   useEffect(() => {
@@ -130,62 +134,99 @@ export const RevealStage: React.FC<RevealStageProps> = ({
     }));
   };
 
-  // SCENARIO 2: Grand Finale (Winner 2 has been crowned)
-  if (room.winner2Id) {
+  // SCENARIO 2: Grand Finale (Winner 2 crowned for 3+ players, or Sole Winner for 2-player duel)
+  if (isGrandFinale) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-4 max-w-4xl mx-auto font-serif">
         <div className="text-center mb-6">
-          <span className="text-xs font-semibold tracking-wider text-amber-400 uppercase bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20 flex items-center gap-1.5 justify-center mx-auto w-fit">
-            <Flame className="h-3.5 w-3.5" /> Bonfire Grand Finale
+          <span className="text-xs font-semibold tracking-wider text-amber-400 uppercase bg-amber-500/10 px-3.5 py-1 rounded-full border border-amber-500/20 flex items-center gap-1.5 justify-center mx-auto w-fit">
+            <Flame className="h-3.5 w-3.5 fill-current" /> {isTwoPlayerDuel ? '1-on-1 Duel Grand Finale' : 'Bonfire Grand Finale'}
           </span>
-          <h1 className="text-4xl sm:text-5xl font-extrabold text-white mt-2">
-            The Winners of Rupiko
+          <h1 className="text-3xl sm:text-5xl font-extrabold text-white mt-2">
+            {isTwoPlayerDuel ? 'The Champion of Rupiko' : 'The Winners of Rupiko'}
           </h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1 max-w-md mx-auto font-sans">
-            All confessions were heard around the fire. Two campers emerged victorious!
+            {isTwoPlayerDuel
+              ? 'The duel has concluded! Winner 1 achieved Total Immunity and the loser’s confession was exposed.'
+              : 'All confessions were heard around the fire. Two campers emerged victorious!'}
           </p>
         </div>
 
         {/* Podium Cards */}
-        <div className="w-full max-w-2xl grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          {/* Winner 1 */}
-          <div className="bg-gradient-to-b from-amber-500/20 via-slate-900/90 to-slate-900 border border-amber-500/40 rounded-3xl p-6 text-center shadow-xl relative overflow-hidden">
-            <div className="h-16 w-16 mx-auto rounded-full bg-amber-400 text-slate-950 flex items-center justify-center shadow-lg shadow-amber-500/30 mb-3 animate-bounce">
-              <Crown className="h-8 w-8 fill-current" />
+        {isTwoPlayerDuel ? (
+          /* 2-Player Duel: Single Winner 1 Podium & Exposed Loser Card */
+          <div className="w-full max-w-2xl grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+            {/* Winner 1 */}
+            <div className="bg-gradient-to-b from-amber-500/20 via-slate-900/90 to-slate-900 border-2 border-amber-500/50 rounded-3xl p-6 text-center shadow-2xl relative overflow-hidden">
+              <div className="h-16 w-16 mx-auto rounded-full bg-amber-400 text-slate-950 flex items-center justify-center shadow-lg shadow-amber-500/40 mb-3 animate-bounce">
+                <Crown className="h-8 w-8 fill-current" />
+              </div>
+              <span className="text-[10px] uppercase font-bold text-amber-400 font-sans tracking-widest block mb-1">
+                SOLE SURVIVOR • TOTAL IMMUNITY
+              </span>
+              <h2 className="text-2xl font-black text-white">{winner1?.name || 'Winner 1'}</h2>
+              <p className="text-xs text-amber-300/80 font-sans mt-1">
+                Scored highest in Balloon Popping Frenzy. Confession was permanently protected and never exposed!
+              </p>
             </div>
-            <span className="text-[10px] uppercase font-bold text-amber-400 font-sans tracking-widest block mb-1">
-              Winner 1 • Total Immunity
-            </span>
-            <h2 className="text-2xl font-black text-white">{winner1?.name || 'Winner 1'}</h2>
-            <p className="text-xs text-amber-300/80 font-sans mt-1">
-              Most unrecognizable voice in blind guessing. Confession was never exposed!
-            </p>
-          </div>
 
-          {/* Winner 2 */}
-          <div className="bg-gradient-to-b from-emerald-500/20 via-slate-900/90 to-slate-900 border border-emerald-500/40 rounded-3xl p-6 text-center shadow-xl relative overflow-hidden">
-            <div className="h-16 w-16 mx-auto rounded-full bg-emerald-400 text-slate-950 flex items-center justify-center shadow-lg shadow-emerald-500/30 mb-3 animate-bounce">
-              <Sparkles className="h-8 w-8 fill-current" />
+            {/* Loser Player */}
+            <div className="bg-gradient-to-b from-rose-500/10 via-slate-900/90 to-slate-900 border border-rose-500/30 rounded-3xl p-6 text-center shadow-xl relative overflow-hidden">
+              <div className="h-16 w-16 mx-auto rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center justify-center shadow-md mb-3">
+                <Volume2 className="h-8 w-8" />
+              </div>
+              <span className="text-[10px] uppercase font-bold text-rose-400 font-sans tracking-widest block mb-1">
+                CONFESSION EXPOSED TO CIRCLE
+              </span>
+              <h2 className="text-2xl font-black text-white">{loserPlayer?.name || 'Challenger'}</h2>
+              <p className="text-xs text-rose-300/80 font-sans mt-1">
+                Lost the 1-on-1 duel. Their secret voice confession was played aloud for all to hear!
+              </p>
             </div>
-            <span className="text-[10px] uppercase font-bold text-emerald-400 font-sans tracking-widest block mb-1">
-              Winner 2 • Chosen Survivor
-            </span>
-            <h2 className="text-2xl font-black text-white">{winner2?.name || 'Winner 2'}</h2>
-            <p className="text-xs text-emerald-300/80 font-sans mt-1">
-              Chosen by Winner 1 after all confessions were heard by the bonfire!
-            </p>
           </div>
-        </div>
+        ) : (
+          /* 3+ Players: Two Winners Podium */
+          <div className="w-full max-w-2xl grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+            {/* Winner 1 */}
+            <div className="bg-gradient-to-b from-amber-500/20 via-slate-900/90 to-slate-900 border border-amber-500/40 rounded-3xl p-6 text-center shadow-xl relative overflow-hidden">
+              <div className="h-16 w-16 mx-auto rounded-full bg-amber-400 text-slate-950 flex items-center justify-center shadow-lg shadow-amber-500/30 mb-3 animate-bounce">
+                <Crown className="h-8 w-8 fill-current" />
+              </div>
+              <span className="text-[10px] uppercase font-bold text-amber-400 font-sans tracking-widest block mb-1">
+                Winner 1 • Total Immunity
+              </span>
+              <h2 className="text-2xl font-black text-white">{winner1?.name || 'Winner 1'}</h2>
+              <p className="text-xs text-amber-300/80 font-sans mt-1">
+                Top scorer in minigame. Confession was never exposed!
+              </p>
+            </div>
+
+            {/* Winner 2 */}
+            <div className="bg-gradient-to-b from-emerald-500/20 via-slate-900/90 to-slate-900 border border-emerald-500/40 rounded-3xl p-6 text-center shadow-xl relative overflow-hidden">
+              <div className="h-16 w-16 mx-auto rounded-full bg-emerald-400 text-slate-950 flex items-center justify-center shadow-lg shadow-emerald-500/30 mb-3 animate-bounce">
+                <Sparkles className="h-8 w-8 fill-current" />
+              </div>
+              <span className="text-[10px] uppercase font-bold text-emerald-400 font-sans tracking-widest block mb-1">
+                Winner 2 • Chosen Survivor
+              </span>
+              <h2 className="text-2xl font-black text-white">{winner2?.name || 'Winner 2'}</h2>
+              <p className="text-xs text-emerald-300/80 font-sans mt-1">
+                Chosen by Winner 1 after all confessions were heard by the bonfire!
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Scoreboard */}
         <div className="w-full max-w-2xl bg-slate-900/80 border border-slate-800 rounded-2xl p-5 mb-6 backdrop-blur-md">
           <span className="text-xs font-bold uppercase tracking-wider text-slate-300 block mb-3 font-sans">
-            Campfire Recognition Scoreboard
+            {isTwoPlayerDuel ? 'Duel Results & Scoreboard' : 'Campfire Recognition Scoreboard'}
           </span>
           <div className="space-y-2 font-sans">
             {players.map((p) => {
               const isW1 = p.id === room.winner1Id;
               const isW2 = p.id === room.winner2Id;
+              const isLoser = isTwoPlayerDuel && !isW1;
               return (
                 <div
                   key={p.id}
@@ -194,6 +235,8 @@ export const RevealStage: React.FC<RevealStageProps> = ({
                       ? 'bg-amber-500/15 border-amber-500/50 text-white font-bold'
                       : isW2
                       ? 'bg-emerald-500/15 border-emerald-500/50 text-white font-bold'
+                      : isLoser
+                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-200'
                       : 'bg-slate-950/60 border-slate-800/80 text-slate-300'
                   }`}
                 >
@@ -203,11 +246,12 @@ export const RevealStage: React.FC<RevealStageProps> = ({
                     </div>
                     <span>{p.name}</span>
                     {p.id === currentPlayer?.id && <span className="text-[9px] bg-white/20 text-white px-1.5 py-0.5 rounded font-bold">YOU</span>}
-                    {isW1 && <span className="text-[9px] bg-amber-400 text-black px-1.5 py-0.5 rounded font-black">WINNER 1</span>}
+                    {isW1 && <span className="text-[9px] bg-amber-400 text-black px-1.5 py-0.5 rounded font-black">{isTwoPlayerDuel ? 'CHAMPION' : 'WINNER 1'}</span>}
                     {isW2 && <span className="text-[9px] bg-emerald-400 text-black px-1.5 py-0.5 rounded font-black">WINNER 2</span>}
+                    {isLoser && <span className="text-[9px] bg-rose-500/20 text-rose-300 px-1.5 py-0.5 rounded font-semibold">EXPOSED</span>}
                   </div>
                   <span className="text-xs text-slate-400">
-                    Recognized {p.recognitionScore || 0} times
+                    {p.score !== undefined ? `${p.score} pts in Minigame` : ''}
                   </span>
                 </div>
               );
@@ -374,14 +418,18 @@ export const RevealStage: React.FC<RevealStageProps> = ({
             </div>
           </div>
         ) : (
-          /* All Confessions Completed Card -> Proceed to Winner 1 Selection */
+          /* All Confessions Completed Card -> Proceed to Winner 1 Selection or 2-player podium */
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-8 text-center shadow-2xl backdrop-blur-xl mb-6">
             <div className="h-16 w-16 mx-auto rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center mb-4">
               <CheckCircle2 className="h-8 w-8" />
             </div>
-            <h2 className="text-2xl font-black text-white mb-2">All Confessions Have Been Heard!</h2>
+            <h2 className="text-2xl font-black text-white mb-2">
+              {isTwoPlayerDuel ? 'The Duel Confession Has Been Heard!' : 'All Confessions Have Been Heard!'}
+            </h2>
             <p className="text-xs sm:text-sm text-slate-400 max-w-sm mx-auto mb-6 font-sans">
-              Everyone has listened to all the confessions around the fire. Now, Winner 1 ({winner1?.name}) will choose Winner 2!
+              {isTwoPlayerDuel
+                ? `The challenger's confession was exposed around the fire. Winner 1 (${winner1?.name}) earned Total Immunity and is crowned Sole Survivor!`
+                : `Everyone has listened to all the confessions around the fire. Now, Winner 1 (${winner1?.name}) will choose Winner 2!`}
             </p>
 
             <button
@@ -389,7 +437,7 @@ export const RevealStage: React.FC<RevealStageProps> = ({
               onClick={onNextConfession}
               className="w-full max-w-xs py-4 mx-auto rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-rose-600 hover:from-amber-400 hover:to-rose-500 text-white font-extrabold text-sm uppercase tracking-wider shadow-xl shadow-amber-950/40 transition-all flex items-center justify-center gap-2 font-sans"
             >
-              <span>Proceed to Winner 2 Selection</span>
+              <span>{isTwoPlayerDuel ? 'Crown Sole Survivor Podium' : 'Proceed to Winner 2 Selection'}</span>
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>
